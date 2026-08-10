@@ -7,60 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='css/board.css') }}" />
 
-  <!-- SVG Sprite -->
-  <svg style="display:none" xmlns="http://www.w3.org/2000/svg">
-    <symbol id="ic-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polygon points="5 3 19 12 5 21 5 3" />
-    </symbol>
-    <symbol id="ic-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </symbol>
-    <symbol id="ic-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-    </symbol>
-    <symbol id="ic-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" /><circle cx="12" cy="7" r="4" />
-    </symbol>
-    <symbol id="ic-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="15 18 9 12 15 6" />
-    </symbol>
-    <symbol id="ic-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-      <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
-    </symbol>
-    <symbol id="ic-done-head" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="3" /><polyline points="9 12 11 14 15 10" />
-    </symbol>
-    <symbol id="ic-xclose" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-    </symbol>
-    <symbol id="ic-detail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
-    </symbol>
-    <symbol id="ic-attach" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-    </symbol>
-    <symbol id="ic-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
-      <polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
-    </symbol>
-    <symbol id="ic-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
-    </symbol>
-    <symbol id="ic-load-more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="3" x2="12" y2="15" /><path d="M5 21h14" />
-    </symbol>
-    <symbol id="ic-msg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-    </symbol>
-    <symbol id="ic-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.07 1.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z" />
-    </symbol>
-  </svg>
+  {% include '_icons.html' %}
 </head>
 
 <body>
@@ -76,6 +23,12 @@
         <div class="h-date" id="dateTxt"></div>
       </div>
       <div class="h-ref"><span class="h-dot"></span>Auto refresh 5 นาที</div>
+      {% if board_key in list_view_boards %}
+        <a href="/{{ board_key }}" class="h-back" title="สลับไปมุมมองรายการ">
+          <svg width="12" height="12"><use href="#ic-list" /></svg>
+          มุมมองรายการ
+        </a>
+      {% endif %}
       <a href="/" class="h-back">
         <svg width="12" height="12"><use href="#ic-back" /></svg>
         กลับ
@@ -379,218 +332,7 @@
 
   </div><!-- /main -->
 
-  <!-- ══════════════════════════════════════
-       Modal: รับงาน
-  ══════════════════════════════════════ -->
-  <div class="modal-overlay" id="modal-start">
-    <div class="modal-box">
-      <div class="modal-title">รับงาน / เริ่มดำเนินการ</div>
-      <p style="font-size:13px;color:var(--text-sub);margin:8px 0 4px">
-        Request ID: <strong id="modal-req-id" class="modal-req-id">—</strong>
-      </p>
-      <label>เลือกผู้รับผิดชอบ</label>
-      <select class="emp-select" id="emp-select">
-        <option value="">-- กำลังโหลดรายชื่อ... --</option>
-      </select>
-      <div class="modal-btns">
-        <button class="modal-cancel-btn" onclick="closeStartModal()">ยกเลิก</button>
-        <button class="modal-confirm"    onclick="confirmStart()">
-          <svg width="13" height="13" fill="none" stroke="#fff" stroke-width="2.5"><use href="#ic-check" /></svg>
-          ยืนยัน รับงาน
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════
-       Modal: ยืนยันปิดงาน
-  ══════════════════════════════════════ -->
-  <div class="modal-overlay" id="modal-close">
-    <div class="modal-box">
-      <div class="modal-title">ปิดงาน</div>
-      <p style="font-size:13px;color:var(--text-sub);margin:8px 0 4px">
-        Request ID: <strong id="modal-close-req-id">—</strong>
-      </p>
-      <select id="close-job-it-sel" class="form-control" style="width:100%;margin-top:8px">
-        <option value="">เลือก IT</option>
-      </select>
-      <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
-        <button class="btn-cancel" onclick="closeCloseModal()">ยกเลิก</button>
-        <button class="btn-save"   onclick="confirmClose()">✔ ยืนยันปิดงาน</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════
-       Modal: IT ยกเลิก
-  ══════════════════════════════════════ -->
-  <div class="modal-overlay" id="modal-cancel-it">
-    <div class="modal-box">
-      <div class="modal-title">IT ยกเลิกงาน</div>
-      <p style="font-size:13px;color:var(--text-sub);margin:8px 0 4px">
-        Request ID: <strong id="modal-cancel-req-id">—</strong>
-      </p>
-      <select id="cancel-it-sel" class="form-control" style="width:100%;margin-top:8px">
-        <option value="">เลือก IT</option>
-      </select>
-      <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
-        <button class="btn-cancel" onclick="closeCancelModal()">ยกเลิก</button>
-        <button class="btn-save"   onclick="confirmCancelIT()">✖ ยืนยันยกเลิก</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════
-       Modal: IT อนุมัติ
-  ══════════════════════════════════════ -->
-  <div class="modal-overlay" id="modal-approve-it">
-    <div class="modal-box">
-      <div class="modal-title">IT อนุมัติ</div>
-      <p style="font-size:13px;color:var(--text-sub);margin:8px 0 4px">
-        Request ID: <strong id="modal-approve-req-id">—</strong>
-      </p>
-      <select id="approve-it-sel" class="form-control" style="width:100%;margin-top:8px">
-        <option value="">เลือก IT</option>
-      </select>
-      <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
-        <button class="btn-cancel" onclick="closeApproveModal()">ยกเลิก</button>
-        <button class="btn-save"   onclick="confirmApproveIT()">✔ ยืนยันอนุมัติ</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════
-       STATUS MODAL
-  ══════════════════════════════════════ -->
-  <div class="status-modal-wrap" id="status-modal-wrap">
-    <div class="status-modal">
-      <div class="status-modal-head">
-        <div class="status-modal-title">เปลี่ยนสถานะเอกสาร</div>
-        <button class="status-modal-close" onclick="closeStatusModal()">✕</button>
-      </div>
-      <div class="status-modal-body">
-        <div class="status-preview">
-          <div class="status-preview-label">สถานะปัจจุบัน</div>
-          <div class="status-preview-current" id="status-current-label" style="color: blue;">-</div>
-        </div>
-        <br>
-        <div class="status-field">
-          <label>สถานะใหม่</label>
-          <div class="cdd-wrap" id="status-cdd-wrap">
-            <div class="cdd-selected" id="status-cdd-selected" onclick="toggleCdd()">
-              <span id="status-cdd-label">รอดำเนินการ</span>
-              <span class="cdd-arrow">▾</span>
-            </div>
-            <div class="cdd-list" id="status-cdd-list">
-              <div class="cdd-item" data-value="0" style="background:#f3f4f6;color:#374151" onclick="selectCdd(this)">รอดำเนินการ</div>
-              <div class="cdd-item" data-value="1" style="background:#d1fae5;color:#065f46" onclick="selectCdd(this)">พร้อมทำ</div>
-              <div class="cdd-item" data-value="2" style="background:#dbeafe;color:#1e40af" onclick="selectCdd(this)">กำลังทำ</div>
-              <div class="cdd-item" data-value="3" style="background:#fee2e2;color:#991b1b" onclick="selectCdd(this)">ยกเลิก</div>
-              <div class="cdd-item" data-value="5" style="background:#bed8f4;color:#0101a4" onclick="selectCdd(this)">เสร็จ</div>
-            </div>
-            <!-- hidden input แทน select value -->
-            <input type="hidden" id="status-select" value="0">
-          </div>
-        </div>
-        <div class="status-field">
-          <label>ผู้ดำเนินการ IT</label>
-          <select id="status-it-user" class="status-select">
-            <option value="">กำลังโหลด...</option>
-          </select>
-        </div>
-        <div class="status-field">
-          <label>หมายเหตุ</label>
-          <textarea id="status-note" class="status-note" rows="3"></textarea>
-        </div>
-        <div class="status-summary" id="status-summary">-</div>
-      </div>
-      <div class="status-modal-footer">
-        <button class="status-cancel-btn"  onclick="closeStatusModal()">ยกเลิก</button>
-        <button class="status-confirm-btn" onclick="confirmStatusChange()">ยืนยันเปลี่ยนสถานะ</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══════════════════════════════════════
-       Detail Modal
-  ══════════════════════════════════════ -->
-  <div class="detail-overlay" id="modal-detail">
-    <div class="detail-modal">
-
-      <!-- Header -->
-      <div class="dm-header">
-        <div class="dm-header-icon">
-          <svg width="22" height="22" fill="none" stroke="var(--purple)" stroke-width="1.8"><use href="#ic-detail"/></svg>
-        </div>
-        <div class="dm-header-info">
-          <div class="dm-type-label" id="d-head-tag">ประเภท</div>
-          <div class="dm-title-row">
-            <h2 class="dm-title" id="d-head-title">&#8212;</h2>
-            <span class="dm-status-badge" id="d-status-badge"></span>
-          </div>
-        </div>
-        <button class="dm-close-btn" onclick="closeDetailModal()">&#x2715;</button>
-      </div>
-
-      <!-- Assignee Bar -->
-      <div class="dm-assignee-bar">
-        <div class="dm-assignee-left">
-          <div class="dm-assignee-avatar">
-            <svg width="18" height="18" fill="none" stroke="var(--purple)" stroke-width="2"><use href="#ic-user"/></svg>
-          </div>
-          <div class="dm-assignee-info">
-            <div class="dm-assignee-label">ผู้รับผิดชอบ</div>
-            <div class="dm-assignee-name" id="d-assignee-name">&#8212;</div>
-            <div class="dm-assignee-dept" id="d-assignee-dept"></div>
-          </div>
-        </div>
-        <div class="dm-assignee-actions" id="dm-action-buttons">
-          <button id="btn-change-status" class="dm-btn-primary" onclick="openStatusModal(currentDetailReqId)">
-            <svg width="14" height="14" fill="none" stroke="#fff" stroke-width="2.2" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
-            เปลี่ยนสถานะ
-          </button>
-          <button id="btn-change-worker" class="dm-btn-outline" onclick="openStartModal(currentDetailReqId)">
-            <svg width="14" height="14" fill="none" stroke="var(--purple)" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-            เปลี่ยนผู้ทำ
-          </button>
-          <button id="btn-close-tracking" class="dm-btn-primary"
-                  style="display:none;background:var(--green)"
-                  onclick="openCloseTrackFromDetail(currentDetailReqId)">
-            <svg width="14" height="14" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-            ปิดงาน
-          </button>
-        </div>
-      </div>
-
-      <!-- Body -->
-      <div class="dm-body" id="detail-body">
-        <div style="text-align:center;padding:40px;color:var(--text-muted)">กำลังโหลด...</div>
-      </div>
-
-    </div>
-  </div>
-
-    <div class="toast" id="toast"></div>
-
-  <!-- ══════════════════════════════════════
-       Modal: ปิดงานเอกสาร (tracking)
-  ══════════════════════════════════════ -->
-  <div class="modal-overlay" id="close-track-modal">
-    <div class="modal-box">
-      <div class="modal-title">ปิดงานเอกสาร</div>
-      <p style="font-size:13px;color:var(--text-sub);margin:8px 0 4px">
-        Request ID: <strong id="close-track-req-id" class="modal-req-id">—</strong>
-      </p>
-      <label>เลือก IT ผู้ปิดงาน</label>
-      <select id="close-track-it" class="emp-select">
-        <option value="">เลือก IT</option>
-      </select>
-      <div class="modal-btns">
-        <button class="modal-cancel-btn" onclick="closeTrackModal()">ยกเลิก</button>
-        <button class="btn-save"         onclick="submitCloseTracking()">✔ ปิดงาน</button>
-      </div>
-    </div>
-  </div>
+  {% include '_modals.html' %}
 
   <!-- ── ค่าจาก Flask → JS constants (ต้องอยู่ก่อน board.js) ── -->
   <script>
@@ -601,6 +343,7 @@
     const STATUS_LABEL         = {{ status_map|tojson }};
     const TRANSFER_TYPE_LABEL  = {{ transfer_type_labels|tojson }};
   </script>
+  <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
   <script src="{{ url_for('static', filename='js/board.js') }}"></script>
 
 </body>

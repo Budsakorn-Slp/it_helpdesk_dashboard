@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{ cfg.title }} — รายการเอกสาร</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  {# board.css ให้ธีมและสไตล์ modal ทั้งหมด, asset_list.css เพิ่มเฉพาะส่วนตาราง #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/board.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/asset_list.css') }}" />
+
+  {% include '_icons.html' %}
+</head>
+
+<body class="page-list">
+
+  <!-- ── HEADER ── -->
+  <div class="header">
+    <div class="h-left">
+      <div class="h-logo">SB IT</div>
+      <div class="h-title">{{ cfg.title }}</div>
+    </div>
+    <div class="h-right">
+      <div style="text-align:right">
+        <div class="h-clock" id="clock">--:--:--</div>
+        <div class="h-date" id="dateTxt"></div>
+      </div>
+      <a href="/asset?view=board" class="h-back" title="สลับไปมุมมองบอร์ด">
+        <svg width="12" height="12"><use href="#ic-board" /></svg>
+        มุมมองบอร์ด
+      </a>
+      <a href="/" class="h-back">
+        <svg width="12" height="12"><use href="#ic-back" /></svg>
+        กลับ
+      </a>
+    </div>
+  </div>
+
+  <div class="list-page">
+
+    {% if error %}
+      <div class="board-error">⚠ ต่อฐานข้อมูลไม่ได้: {{ error }}</div>
+    {% endif %}
+
+    <!-- ── การ์ดสถิติ (คลิกเพื่อกรอง) ── -->
+    <div class="stat-row">
+      {% set cards = [
+        ('',         'ทั้งหมด',       stats.all,      'all'),
+        ('waiting',  'รออนุมัติ',     stats.waiting,  'wait'),
+        ('ready',    'พร้อมทำ',       stats.ready,    'ready'),
+        ('doing',    'กำลังทำ',       stats.doing,    'doing'),
+        ('tracking', 'ติดตามเอกสาร',  stats.tracking, 'track'),
+        ('done',     'เสร็จสิ้น',     stats.done,     'done'),
+        ('cancel',   'ยกเลิก',        stats.cancel,   'cancel')
+      ] %}
+      {% for key, label, count, cls in cards %}
+        <button class="stat-card stat-{{ cls }}{{ ' active' if loop.first }}"
+                data-flow="{{ key }}" onclick="filterByFlow(this)">
+          <div class="stat-num">{{ count }}</div>
+          <div class="stat-lab">{{ label }}</div>
+        </button>
+      {% endfor %}
+    </div>
+
+    <!-- ── แถบค้นหา / ตัวกรอง ── -->
+    <div class="list-toolbar">
+      <div class="tb-search">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-search"/></svg>
+        <input type="text" id="list-search" placeholder="ค้นหาเลขที่เอกสาร, ชื่อผู้ขอ, แผนก, เรื่อง...">
+      </div>
+
+      <select class="tb-select" id="list-type">
+        <option value="">ทุกประเภท</option>
+        {% for label in type_labels %}<option value="{{ label }}">{{ label }}</option>{% endfor %}
+      </select>
+
+      <select class="tb-select" id="list-days">
+        <option value="">ทุกช่วงเวลา</option>
+        <option value="1">วันนี้</option>
+        <option value="7">7 วันล่าสุด</option>
+        <option value="30">30 วันล่าสุด</option>
+        <option value="90">90 วันล่าสุด</option>
+      </select>
+
+      <button class="tb-clear" onclick="clearListFilter()">✕ ล้างตัวกรอง</button>
+      <span class="tb-count" id="list-count"></span>
+    </div>
+
+    <!-- ── ตารางเอกสาร ── -->
+    <div class="list-wrap">
+      <table class="list-table">
+        <thead>
+          <tr>
+            <th class="c-id">เลขที่</th>
+            <th class="c-date">วันที่</th>
+            <th>ผู้ขอ</th>
+            <th class="c-type">ประเภท</th>
+            <th>เรื่อง</th>
+            <th class="c-status">สถานะ</th>
+            <th class="c-owner">ผู้รับผิดชอบ</th>
+            <th class="c-act">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="list-body">
+          {% for r in rows %}
+            <tr class="list-row"
+                data-id="{{ r.id }}"
+                data-flow="{{ r.workflow_status }}"
+                data-type="{{ r.type_label }}"
+                data-date="{{ r.date_full }}"
+                data-search="{{ (r.id ~ ' ' ~ r.requester ~ ' ' ~ r.dept ~ ' ' ~ r.title ~ ' ' ~ r.subtitle)|lower }}">
+
+              <td class="c-id"><span class="doc-id">{{ r.id }}</span></td>
+              <td class="c-date">{{ r.date }}</td>
+
+              <td>
+                <div class="cell-main">{{ r.requester }}</div>
+                <div class="cell-sub">{{ r.dept }}</div>
+              </td>
+
+              <td class="c-type"><span class="type-tag type-{{ r.type_cls }}">{{ r.type_label }}</span></td>
+
+              <td>
+                <div class="cell-main" title="{{ r.remark }}">{{ r.title }}</div>
+                {% if r.subtitle %}<div class="cell-sub">{{ r.subtitle }}</div>{% endif %}
+              </td>
+
+              <td class="c-status">
+                <span class="flow-pill flow-{{ r.flow_cls }}">{{ r.flow_label }}</span>
+                {% if r.workflow_status == 'tracking' and not r.tracking_complete %}
+                  <div class="flow-note">⏳ รอลายเซ็นครบ</div>
+                {% endif %}
+              </td>
+
+              <td class="c-owner">
+                {% if r.owner %}
+                  <div class="owner"><span class="owner-av">{{ r.owner_initial }}</span>{{ r.owner }}</div>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+
+              <td class="c-act">
+                <div class="act-row">
+                  {% if 'start' in r.actions %}
+                    <button class="act-btn act-start" onclick="openStartModal('{{ r.id }}')">
+                      <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-play"/></svg>
+                      เริ่มทำ
+                    </button>
+                  {% endif %}
+
+                  {% if 'close' in r.actions %}
+                    <button class="act-btn act-close" onclick="openCloseModal('{{ r.id }}')">
+                      <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><use href="#ic-check"/></svg>
+                      ปิดงาน
+                    </button>
+                  {% endif %}
+
+                  {% if 'approve' in r.actions %}
+                    <button class="act-btn act-approve" onclick="approveByIT('{{ r.id }}')">✔ อนุมัติ</button>
+                    <button class="act-btn act-reject"  onclick="cancelByIT('{{ r.id }}')">✖ ยกเลิก</button>
+                  {% endif %}
+
+                  {% if 'close_tracking' in r.actions %}
+                    {% if r.tracking_complete %}
+                      <button class="act-btn act-close" onclick="openCloseTrackModal('{{ r.id }}')">
+                        <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><use href="#ic-check"/></svg>
+                        ปิดงาน
+                      </button>
+                    {% else %}
+                      <button class="act-btn act-wait" disabled title="ลายเซ็นบนเอกสารยังไม่ครบ">⏳ รอลายเซ็น</button>
+                    {% endif %}
+                  {% endif %}
+
+                  <button class="act-btn act-status" title="เปลี่ยนสถานะ"
+                          onclick="openStatusModal('{{ r.id }}', '{{ r.request_status }}')">
+                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                      <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/>
+                      <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                    </svg>
+                  </button>
+
+                  <button class="act-btn act-detail" title="ดูรายละเอียด" onclick="openDetailModal('{{ r.id }}')">
+                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-detail"/></svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="8" class="list-empty">ไม่พบเอกสาร</td></tr>
+          {% endfor %}
+          <tr id="list-no-match" style="display:none">
+            <td colspan="8" class="list-empty">ไม่พบเอกสารที่ตรงกับเงื่อนไข</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /list-page -->
+
+  {% include '_modals.html' %}
+
+  <!-- ── ค่าจาก Flask → JS constants (ต้องอยู่ก่อน ui.js) ── -->
+  <script>
+    const STATUS_LABEL        = {{ status_map|tojson }};
+    const TRANSFER_TYPE_LABEL = {{ transfer_type_labels|tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/asset_list.js') }}"></script>
+
+</body>
+</html>

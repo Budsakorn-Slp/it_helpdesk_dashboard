@@ -102,6 +102,19 @@ TRANSFER_FOR_REQUEST = """
     FROM IT_HELPDESK_TRANSFER WHERE REQUEST_ID = :req_id
 """
 
+#: ฟิลด์ที่ใช้ตัดสินว่าลายเซ็นครบ — แถวล่าสุด 1 แถวต่อ REQUEST_ID (ทุกสถานะ)
+LATEST_TRANSFER_SIGNATURE = """
+    SELECT REQUEST_ID, TRANSFER_TYPE, TRANSFER_STATUS,
+           SENDER_NAME, RECEIVER_APPROVED_AT, MANAGER_APPROVE_DATE
+    FROM (
+        SELECT REQUEST_ID, TRANSFER_TYPE, STATUS AS TRANSFER_STATUS,
+               SENDER_NAME, RECEIVER_APPROVED_AT, MANAGER_APPROVE_DATE,
+               ROW_NUMBER() OVER (PARTITION BY REQUEST_ID
+                                  ORDER BY UPDATED_AT DESC NULLS LAST, ID DESC) AS rn
+        FROM IT_HELPDESK_TRANSFER
+    ) WHERE rn = 1
+"""
+
 #: ข้อมูลลายเซ็นบนตัวเอกสาร (ใช้แทน approver chain เมื่อคำขอมีเอกสารโอนย้าย)
 TRANSFER_SIGNATURES = """
     SELECT t.TRANSFER_TYPE,
