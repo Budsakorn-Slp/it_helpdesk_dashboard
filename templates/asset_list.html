@@ -74,20 +74,41 @@
   {% endmacro %}
 
   <aside class="nav" id="nav">
-    <div class="nav-head">หมวดหมู่เอกสาร</div>
+
     <ul class="nav-tree">
       <li class="nav-node lv0">
         <div class="nav-item">
           <span class="nav-caret-space"></span>
-          <button class="nav-label active" onclick="filterByNav(this)" data-key="">
+          <button class="nav-label nav-all active" onclick="resetAll()" data-key="">
             <svg class="nav-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-list"/></svg>
             <span class="nav-text">ทั้งหมด</span>
             <span class="nav-count">{{ rows|length }}</span>
           </button>
         </div>
       </li>
+    </ul>
+
+    <div class="nav-head">สถานะงาน</div>
+    <ul class="nav-tree">
+      {% for s in status_nav %}
+        <li class="nav-node lv0">
+          <div class="nav-item">
+            <span class="nav-caret-space"></span>
+            <button class="nav-label" onclick="filterByFlow(this)" data-flow="{{ s.key }}">
+              <span class="nav-dot dot-{{ s.cls }}"></span>
+              <span class="nav-text">{{ s.label }}</span>
+              <span class="nav-count">{{ s.count }}</span>
+            </button>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+
+    <div class="nav-head">หมวดหมู่เอกสาร</div>
+    <ul class="nav-tree">
       {% for node in nav %}{{ nav_node(node, 0) }}{% endfor %}
     </ul>
+
     <div class="nav-foot">
       คำขอจะนับเป็น <b>ใบโอนย้าย</b> เมื่อมีเอกสารในระบบโอนย้ายเท่านั้น<br>
       เบิก / ยืม ที่ไม่ได้ออกเอกสาร จะอยู่ในหมวดคำขอทั่วไป
@@ -99,26 +120,6 @@
     {% if error %}
       <div class="board-error">⚠ ต่อฐานข้อมูลไม่ได้: {{ error }}</div>
     {% endif %}
-
-    <!-- ── การ์ดสถิติ (คลิกเพื่อกรอง) ── -->
-    <div class="stat-row">
-      {% set cards = [
-        ('',         'ทั้งหมด',       stats.all,      'all'),
-        ('waiting',  'รออนุมัติ',     stats.waiting,  'wait'),
-        ('ready',    'พร้อมทำ',       stats.ready,    'ready'),
-        ('doing',    'กำลังทำ',       stats.doing,    'doing'),
-        ('tracking', 'ติดตามเอกสาร',  stats.tracking, 'track'),
-        ('done',     'เสร็จสิ้น',     stats.done,     'done'),
-        ('cancel',   'ยกเลิก',        stats.cancel,   'cancel')
-      ] %}
-      {% for key, label, count, cls in cards %}
-        <button class="stat-card stat-{{ cls }}{{ ' active' if loop.first }}"
-                data-flow="{{ key }}" onclick="filterByFlow(this)">
-          <div class="stat-num">{{ count }}</div>
-          <div class="stat-lab">{{ label }}</div>
-        </button>
-      {% endfor %}
-    </div>
 
     <!-- ── แถบค้นหา / ตัวกรอง ── -->
     <div class="list-toolbar">

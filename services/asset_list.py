@@ -36,7 +36,7 @@ WORKFLOW_LABELS = {
 #: ลำดับที่แสดงในตาราง — งานที่ต้องลงมือขึ้นก่อน
 ROW_ORDER = {"ready": 1, "doing": 2, "tracking": 3, "waiting": 4, "done": 5, "cancel": 6}
 
-#: กลุ่มที่นับเป็นการ์ดสถิติด้านบน
+#: ลำดับสถานะที่แสดงในเมนูซ้าย
 STAT_GROUPS = ("waiting", "ready", "doing", "tracking", "done", "cancel")
 
 
@@ -106,6 +106,19 @@ def empty():
 
 
 # ── เมนูซ้าย ─────────────────────────────────────────────────────────────────
+
+def build_status_nav(stats):
+    """หมวด "สถานะงาน" ในเมนูซ้าย — เรียงตามลำดับการทำงานจริง"""
+    return [
+        {
+            "key":   key,
+            "label": WORKFLOW_LABELS[key][0],
+            "cls":   WORKFLOW_LABELS[key][1],
+            "count": stats.get(key, 0),
+        }
+        for key in STAT_GROUPS
+    ]
+
 
 def build_nav(rows):
     """โครงเมนูซ้ายพร้อมจำนวนเอกสารในแต่ละหมวด

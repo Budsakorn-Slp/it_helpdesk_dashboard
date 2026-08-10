@@ -73,6 +73,7 @@ def _render_list(board_key, cfg):
         cfg=cfg,
         rows=rows,
         stats=stats,
+        status_nav=asset_list.build_status_nav(stats),
         nav=asset_list.build_nav(rows),
         status_map=config.STATUS_MAP,
         transfer_type_labels=config.TRANSFER_TYPE_LABELS,

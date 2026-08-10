@@ -75,9 +75,7 @@ function filterByNav(btn) {
   const key = btn.dataset.key || "";
   activeNav = (activeNav === key && key !== "") ? "" : key;
 
-  document.querySelectorAll(".nav-label").forEach(el => {
-    el.classList.toggle("active", (el.dataset.key || "") === activeNav);
-  });
+  markNavActive();
 
   /* กางหมวดแม่ให้เห็นตัวที่เลือกอยู่เสมอ */
   if (activeNav) {
@@ -141,15 +139,36 @@ function applyListFilter() {
   if (countEl) countEl.textContent = hasFilter ? `พบ ${shown} รายการ` : "";
 }
 
-/* คลิกการ์ดสถิติ = กรองตามสถานะงาน (คลิกซ้ำเพื่อยกเลิก) */
-function filterByFlow(card) {
-  const flow = card.dataset.flow || "";
+/* คลิกสถานะในเมนู = กรองตามสถานะงาน (คลิกซ้ำเพื่อยกเลิก) */
+function filterByFlow(btn) {
+  const flow = btn.dataset.flow || "";
   activeFlow = (activeFlow === flow && flow !== "") ? "" : flow;
 
-  document.querySelectorAll(".stat-card").forEach(el => {
-    el.classList.toggle("active", (el.dataset.flow || "") === activeFlow);
-  });
+  markNavActive();
+  if (window.matchMedia("(max-width: 980px)").matches) {
+    document.body.classList.remove("nav-open");
+  }
   applyListFilter();
+}
+
+/* ไฮไลต์รายการในเมนูให้ตรงกับตัวกรองที่เลือกอยู่
+   ปุ่ม "ทั้งหมด" จะสว่างก็ต่อเมื่อไม่ได้กรองอะไรเลย */
+function markNavActive() {
+  document.querySelectorAll(".nav-label[data-flow]").forEach(el => {
+    el.classList.toggle("active", el.dataset.flow === activeFlow && activeFlow !== "");
+  });
+  document.querySelectorAll(".nav-label[data-key]:not(.nav-all)").forEach(el => {
+    el.classList.toggle("active", (el.dataset.key || "") === activeNav && activeNav !== "");
+  });
+  document.querySelector(".nav-all")?.classList.toggle("active", !activeFlow && !activeNav);
+}
+
+/* ปุ่ม "ทั้งหมด" — ล้างทุกตัวกรองในคลิกเดียว */
+function resetAll() {
+  clearListFilter();
+  if (window.matchMedia("(max-width: 980px)").matches) {
+    document.body.classList.remove("nav-open");
+  }
 }
 
 function clearListFilter() {
@@ -159,12 +178,7 @@ function clearListFilter() {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
-  document.querySelectorAll(".stat-card").forEach(el => {
-    el.classList.toggle("active", !el.dataset.flow);
-  });
-  document.querySelectorAll(".nav-label").forEach(el => {
-    el.classList.toggle("active", !el.dataset.key);
-  });
+  markNavActive();
   applyListFilter();
 }
 
