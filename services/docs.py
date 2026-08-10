@@ -54,14 +54,15 @@ def _clean_title(asset_name, remark):
     return (first or "—")[:TITLE_MAX_LEN]
 
 
-def _type_key(row):
-    return (row.get("transfer_type") or row.get("request_typeproblem") or "").strip()
+def classify(row):
+    """แถวจาก DB → (group, code, label, cls) ตามกติกาใบโอนย้าย (ดู config)"""
+    return config.classify_document(row.get("transfer_type"), row.get("request_typeproblem"))
 
 
 def map_row(d):
     """1 แถวจาก sql.DOCS_LIST → dict สำหรับตารางในหน้า /docs"""
     s_label, s_cls, s_group = config.doc_status(d.get("request_status"))
-    t_label, t_cls = config.transfer_type(_type_key(d))
+    doc_group, doc_code, t_label, t_cls = classify(d)
 
     fname  = (d.get("requester_fname") or "").strip()
     lname  = (d.get("requester_lname") or "").strip()
@@ -81,12 +82,14 @@ def map_row(d):
         "dept":           (d.get("requester_dept") or "—").strip() or "—",
         "type_label":     t_label,
         "type_cls":       t_cls,
+        "doc_group":      doc_group,   # transfer = ใบโอนย้าย, request = คำขอทั่วไป
+        "doc_code":       doc_code,
         "status_label":   s_label,
         "status_cls":     s_cls,
         "status_group":   s_group,
         "owner":          owner,
         "owner_initial":  owner[:2] if owner else "",
-        "is_doc_process": bool((d.get("transfer_type") or "").strip()),
+        "is_doc_process": doc_group == config.GROUP_TRANSFER,
         "transfer_type_name": d.get("transfer_type_name") or "",
         "asset_code":     code,
         "asset_name":     aname,
@@ -99,7 +102,7 @@ def map_row(d):
 def map_detail(d):
     """1 แถวจาก sql.DOCS_DETAIL → หัวเอกสารสำหรับ modal"""
     s_label, s_cls, _ = config.doc_status(d.get("request_status"))
-    t_label, t_cls    = config.transfer_type(_type_key(d))
+    _, _, t_label, t_cls = classify(d)
 
     fname = (d.get("requester_fname") or "").strip()
     lname = (d.get("requester_lname") or "").strip()

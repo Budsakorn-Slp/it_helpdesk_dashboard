@@ -103,3 +103,80 @@ def fetch_rows():
 def empty():
     """โครงสร้างว่าง — ใช้ตอนต่อฐานข้อมูลไม่ได้"""
     return [], {"all": 0, **{g: 0 for g in STAT_GROUPS}}
+
+
+# ── เมนูซ้าย ─────────────────────────────────────────────────────────────────
+
+def build_nav(rows):
+    """โครงเมนูซ้ายพร้อมจำนวนเอกสารในแต่ละหมวด
+
+    โครงสร้างตามที่ระบบเอกสารใช้จริง:
+        เอกสาร
+          └ ใบโอนย้าย            (คำขอที่มีแถวใน IT_HELPDESK_TRANSFER)
+              ├ โอนย้ายระหว่างหน่วยงาน
+              ├ ตัดบัญชี / สูญหาย
+              ├ เพื่อขาย
+              ├ ส่งซ่อม
+              └ ยืม
+        คำขอทั่วไป               (เบิก / ยืม ที่ไม่ได้ออกใบโอนย้าย)
+    """
+    def count(group=None, code=None):
+        return sum(
+            1 for r in rows
+            if (group is None or r["doc_group"] == group)
+            and (code is None or r["doc_code"] == code)
+        )
+
+    transfer_children = [
+        {
+            "key":   f"{config.GROUP_TRANSFER}:{code}",
+            "label": info["label"],
+            "cls":   info["cls"],
+            "count": count(config.GROUP_TRANSFER, code),
+        }
+        for code, info in config.TRANSFER_DOC_TYPES.items()
+    ]
+
+    plain_children = [
+        {
+            "key":   f"{config.GROUP_REQUEST}:{code}",
+            "label": info["label"],
+            "cls":   info["cls"],
+            "count": count(config.GROUP_REQUEST, code),
+        }
+        for code, info in config.PLAIN_REQUEST_TYPES.items()
+    ]
+    other = count(config.GROUP_REQUEST, "OTHER")
+    if other:
+        plain_children.append({
+            "key":   f"{config.GROUP_REQUEST}:OTHER",
+            "label": config.UNKNOWN_REQUEST_TYPE["label"],
+            "cls":   config.UNKNOWN_REQUEST_TYPE["cls"],
+            "count": other,
+        })
+
+    return [
+        {
+            "key":      "doc",
+            "label":    "เอกสาร",
+            "icon":     "ic-folder",
+            "count":    count(config.GROUP_TRANSFER),
+            "children": [
+                {
+                    "key":      config.GROUP_TRANSFER,
+                    "label":    "ใบโอนย้าย",
+                    "icon":     "ic-detail",
+                    "count":    count(config.GROUP_TRANSFER),
+                    "children": transfer_children,
+                },
+            ],
+        },
+        {
+            "key":      config.GROUP_REQUEST,
+            "label":    "คำขอทั่วไป",
+            "icon":     "ic-inbox",
+            "hint":     "ไม่ได้ออกใบโอนย้าย",
+            "count":    count(config.GROUP_REQUEST),
+            "children": plain_children,
+        },
+    ]

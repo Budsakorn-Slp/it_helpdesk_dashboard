@@ -91,20 +91,72 @@ ORDER_PRIORITY = {"ready": 1, "doing": 2, "tracking": 3, "done": 4, "waiting": 5
 
 WORKFLOW_STATUSES = ("ready", "doing", "done", "waiting", "cancel", "tracking")
 
-# ── ประเภทเอกสารทรัพย์สิน (IT_HELPDESK_TRANSFER.TRANSFER_TYPE) ──────────────
-# label = ป้ายภาษาไทย, cls = css class ที่ใช้ในหน้า /docs
-TRANSFER_TYPES = {
-    "TRANSFER":      {"label": "โอนย้าย",  "cls": "transfer"},
-    "BORROW":        {"label": "ยืม",      "cls": "borrow"},
-    "BORROW_DIRECT": {"label": "ยืม",      "cls": "borrow"},
-    "WITHDRAW":      {"label": "เบิก",     "cls": "withdraw"},
-    "DISPOSE":       {"label": "ตัดบัญชี", "cls": "dispose"},
-    "SALE":          {"label": "ขาย",      "cls": "sale"},
-    "REPAIR":        {"label": "ส่งซ่อม",  "cls": "repair"},
-}
-DEFAULT_TRANSFER_TYPE = {"label": "เบิก", "cls": "withdraw"}
+# ── การจัดหมวดเอกสารทรัพย์สิน ───────────────────────────────────────────────
+#
+# ฟอร์ม /form/4 ให้เลือก "ประเภทการดำเนินการ" ก่อน (เบิก / ยืม / โอนย้าย)
+# แล้วเก็บไว้ที่ IT_HELPDESK_REQUEST.REQUEST_TYPEPROBLEM
+#
+# คำขอจะนับเป็น "ใบโอนย้าย" ก็ต่อเมื่อ **มีแถวใน IT_HELPDESK_TRANSFER** เท่านั้น
+#   • เบิก (WITHDRAW) และยืมแบบตรง ไม่สร้างใบโอนย้าย → เป็นคำขอทั่วไป
+#   • เมื่อติ๊กโอนย้าย ระบบจะสร้างใบโอนย้าย แล้วแยกเป็น 5 ประเภทด้านล่าง
+#
+# ป้ายภาษาไทยตรงกับ IT_HELPDESK_TRANSFER.TRANSFER_TYPE_NAME ในฐานข้อมูล
 
-TRANSFER_TYPE_LABELS = {k: v["label"] for k, v in TRANSFER_TYPES.items()}
+GROUP_TRANSFER = "transfer"   # มีใบโอนย้าย
+GROUP_REQUEST  = "request"    # คำขอทั่วไป ไม่มีใบโอนย้าย
+
+#: 5 ประเภทของใบโอนย้าย (IT_HELPDESK_TRANSFER.TRANSFER_TYPE)
+TRANSFER_DOC_TYPES = {
+    "TRANSFER": {"label": "โอนย้ายระหว่างหน่วยงาน", "cls": "transfer"},
+    "DISPOSE":  {"label": "ตัดบัญชี / สูญหาย",      "cls": "dispose"},
+    "SALE":     {"label": "เพื่อขาย",               "cls": "sale"},
+    "REPAIR":   {"label": "ส่งซ่อม",                "cls": "repair"},
+    "BORROW":   {"label": "ยืม",                    "cls": "borrow"},
+}
+
+#: BORROW_DIRECT เป็นรหัสเก่าของ "ยืม" — นับรวมเป็นหมวดเดียวกัน
+TRANSFER_TYPE_ALIASES = {"BORROW_DIRECT": "BORROW"}
+
+#: ประเภทคำขอที่ไม่ได้สร้างใบโอนย้าย
+PLAIN_REQUEST_TYPES = {
+    "WITHDRAW": {"label": "เบิก", "cls": "withdraw"},
+    "BORROW":   {"label": "ยืม",  "cls": "borrow"},
+}
+UNKNOWN_REQUEST_TYPE = {"label": "ไม่ระบุ", "cls": "unknown"}
+
+#: ป้ายที่ฝั่ง JS ใช้ (กล่องติดตามเอกสารในบอร์ด)
+TRANSFER_TYPE_LABELS = {
+    **{k: v["label"] for k, v in TRANSFER_DOC_TYPES.items()},
+    **{alias: TRANSFER_DOC_TYPES[target]["label"]
+       for alias, target in TRANSFER_TYPE_ALIASES.items()},
+}
+
+
+def canonical_transfer_type(code):
+    """รวมรหัสที่มีความหมายเดียวกันให้เหลือรหัสเดียว"""
+    code = str(code or "").strip().upper()
+    return TRANSFER_TYPE_ALIASES.get(code, code)
+
+
+def classify_document(transfer_type, typeproblem):
+    """จัดหมวดคำขอ 1 ใบ → (group, code, label, cls)
+
+    transfer_type = TRANSFER_TYPE จาก IT_HELPDESK_TRANSFER (None ถ้าไม่มีใบโอนย้าย)
+    typeproblem   = REQUEST_TYPEPROBLEM ที่ผู้ใช้เลือกในฟอร์ม
+    """
+    doc_code = canonical_transfer_type(transfer_type)
+    if doc_code:
+        info = TRANSFER_DOC_TYPES.get(doc_code)
+        if info:
+            return GROUP_TRANSFER, doc_code, info["label"], info["cls"]
+        # ประเภทใหม่ที่ยังไม่รู้จัก — ยังถือเป็นใบโอนย้าย แต่แสดงรหัสดิบ
+        return GROUP_TRANSFER, doc_code, doc_code, "transfer"
+
+    code = canonical_transfer_type(typeproblem)
+    info = PLAIN_REQUEST_TYPES.get(code)
+    if info:
+        return GROUP_REQUEST, code, info["label"], info["cls"]
+    return GROUP_REQUEST, "OTHER", UNKNOWN_REQUEST_TYPE["label"], UNKNOWN_REQUEST_TYPE["cls"]
 
 # ── สไตล์สถานะสำหรับหน้า /docs ─────────────────────────────────────────────
 # REQUEST_STATUS → (css pill, กลุ่มที่ใช้นับการ์ดสถิติ)
@@ -136,7 +188,7 @@ def doc_status(code):
     return label, cls, group
 
 
-def transfer_type(key):
-    """TRANSFER_TYPE / REQUEST_TYPEPROBLEM → (label, css class)"""
-    info = TRANSFER_TYPES.get(str(key or "").strip().upper(), DEFAULT_TRANSFER_TYPE)
-    return info["label"], info["cls"]
+def transfer_type(transfer_type_code, typeproblem=None):
+    """TRANSFER_TYPE (+ REQUEST_TYPEPROBLEM สำรอง) → (label, css class)"""
+    _, _, label, cls = classify_document(transfer_type_code, typeproblem)
+    return label, cls

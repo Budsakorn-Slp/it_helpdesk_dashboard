@@ -17,6 +17,9 @@
   <!-- ── HEADER ── -->
   <div class="header">
     <div class="h-left">
+      <button class="nav-burger" onclick="toggleNav()" title="ซ่อน / แสดงเมนู" aria-label="ซ่อนหรือแสดงเมนู">
+        <span></span><span></span><span></span>
+      </button>
       <div class="h-logo">SB IT</div>
       <div class="h-title">{{ cfg.title }}</div>
     </div>
@@ -35,6 +38,61 @@
       </a>
     </div>
   </div>
+
+  <div class="shell">
+
+  <!-- ══════════ NAV ซ้าย (พับได้) ══════════ -->
+  {% macro nav_node(node, level) %}
+    {% set has_children = node.children is defined and node.children %}
+    <li class="nav-node lv{{ level }}{{ ' has-children' if has_children }}">
+      <div class="nav-item" data-key="{{ node.key }}">
+        {% if has_children %}
+          <button class="nav-caret" onclick="toggleNavNode(this)" aria-label="พับ / กาง">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        {% else %}
+          <span class="nav-caret-space"></span>
+        {% endif %}
+
+        <button class="nav-label" onclick="filterByNav(this)" data-key="{{ node.key }}">
+          {% if node.icon %}
+            <svg class="nav-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><use href="#{{ node.icon }}"/></svg>
+          {% elif node.cls %}
+            <span class="nav-dot dot-{{ node.cls }}"></span>
+          {% endif %}
+          <span class="nav-text">{{ node.label }}</span>
+          <span class="nav-count">{{ node.count }}</span>
+        </button>
+      </div>
+
+      {% if has_children %}
+        <ul class="nav-children">
+          {% for child in node.children %}{{ nav_node(child, level + 1) }}{% endfor %}
+        </ul>
+      {% endif %}
+    </li>
+  {% endmacro %}
+
+  <aside class="nav" id="nav">
+    <div class="nav-head">หมวดหมู่เอกสาร</div>
+    <ul class="nav-tree">
+      <li class="nav-node lv0">
+        <div class="nav-item">
+          <span class="nav-caret-space"></span>
+          <button class="nav-label active" onclick="filterByNav(this)" data-key="">
+            <svg class="nav-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-list"/></svg>
+            <span class="nav-text">ทั้งหมด</span>
+            <span class="nav-count">{{ rows|length }}</span>
+          </button>
+        </div>
+      </li>
+      {% for node in nav %}{{ nav_node(node, 0) }}{% endfor %}
+    </ul>
+    <div class="nav-foot">
+      คำขอจะนับเป็น <b>ใบโอนย้าย</b> เมื่อมีเอกสารในระบบโอนย้ายเท่านั้น<br>
+      เบิก / ยืม ที่ไม่ได้ออกเอกสาร จะอยู่ในหมวดคำขอทั่วไป
+    </div>
+  </aside>
 
   <div class="list-page">
 
@@ -69,11 +127,6 @@
         <input type="text" id="list-search" placeholder="ค้นหาเลขที่เอกสาร, ชื่อผู้ขอ, แผนก, เรื่อง...">
       </div>
 
-      <select class="tb-select" id="list-type">
-        <option value="">ทุกประเภท</option>
-        {% for label in type_labels %}<option value="{{ label }}">{{ label }}</option>{% endfor %}
-      </select>
-
       <select class="tb-select" id="list-days">
         <option value="">ทุกช่วงเวลา</option>
         <option value="1">วันนี้</option>
@@ -106,7 +159,8 @@
             <tr class="list-row"
                 data-id="{{ r.id }}"
                 data-flow="{{ r.workflow_status }}"
-                data-type="{{ r.type_label }}"
+                data-nav="{{ r.doc_group }}:{{ r.doc_code }}"
+                data-group="{{ r.doc_group }}"
                 data-date="{{ r.date_full }}"
                 data-search="{{ (r.id ~ ' ' ~ r.requester ~ ' ' ~ r.dept ~ ' ' ~ r.title ~ ' ' ~ r.subtitle)|lower }}">
 
@@ -118,7 +172,10 @@
                 <div class="cell-sub">{{ r.dept }}</div>
               </td>
 
-              <td class="c-type"><span class="type-tag type-{{ r.type_cls }}">{{ r.type_label }}</span></td>
+              <td class="c-type">
+                <span class="type-tag type-{{ r.type_cls }}">{{ r.type_label }}</span>
+                {% if r.doc_group == 'transfer' %}<span class="doc-mark" title="มีใบโอนย้ายในระบบ">◆ ใบโอนย้าย</span>{% endif %}
+              </td>
 
               <td>
                 <div class="cell-main" title="{{ r.remark }}">{{ r.title }}</div>
@@ -197,6 +254,7 @@
     </div>
 
   </div><!-- /list-page -->
+  </div><!-- /shell -->
 
   {% include '_modals.html' %}
 

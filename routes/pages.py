@@ -67,16 +67,13 @@ def _render_list(board_key, cfg):
         rows, stats = asset_list.empty()
         log.error("[list:%s] %s", board_key, error)
 
-    # ประเภทที่มีอยู่จริงในข้อมูล — ใช้เติม dropdown ตัวกรอง
-    type_labels = sorted({r["type_label"] for r in rows})
-
     return render_template(
         "asset_list.html",
         board_key=board_key,
         cfg=cfg,
         rows=rows,
         stats=stats,
-        type_labels=type_labels,
+        nav=asset_list.build_nav(rows),
         status_map=config.STATUS_MAP,
         transfer_type_labels=config.TRANSFER_TYPE_LABELS,
         error=error,

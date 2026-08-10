@@ -1,16 +1,24 @@
 /* ══════════════════════════════════════════════════════════════════════════
    asset_list.js — เฉพาะหน้า /asset แบบรายการเอกสาร
-                   (กรองด้วยการ์ดสถิติ / คำค้น / ประเภท / ช่วงวันที่)
+                   (เมนูซ้ายแบบพับได้ + กรองด้วยการ์ดสถิติ / คำค้น / ช่วงวันที่)
 
    ต้องโหลด ui.js ก่อนไฟล์นี้ — utility กับ modal ทั้งหมดอยู่ที่นั่น
-   ทุกแถวเป็น <tr class="list-row"> ที่มี data-flow / data-type /
-   data-date / data-search มาจาก server แล้ว จึงกรองฝั่ง client ได้ทันที
+
+   ทุกแถวเป็น <tr class="list-row"> ที่ server ใส่ data-* มาให้แล้ว:
+     data-nav    "<group>:<code>"  เช่น transfer:TRANSFER, request:WITHDRAW
+     data-group  transfer | request
+     data-flow   สถานะงาน (ready/doing/waiting/tracking/done/cancel)
+     data-date   วันที่แจ้ง DD/MM/YYYY HH:MM
+     data-search ข้อความรวมสำหรับค้นหา
 ══════════════════════════════════════════════════════════════════════════ */
 
 const AUTO_REFRESH_MS = 300000;   /* รีเฟรชหน้าทุก 5 นาที */
 const MS_PER_DAY      = 86400000;
+const NAV_STATE_KEY   = "assetNavOpen";     /* จำว่าหมวดไหนกางอยู่ */
+const NAV_HIDDEN_KEY  = "assetNavHidden";   /* จำว่าซ่อนแถบเมนูไว้ไหม */
 
-let activeFlow = "";              /* การ์ดสถิติที่เลือกอยู่ ("" = ทั้งหมด) */
+let activeFlow = "";   /* การ์ดสถิติที่เลือก ("" = ทุกสถานะ) */
+let activeNav  = "";   /* หมวดในเมนูซ้าย ("" = ทั้งหมด) */
 
 /* ── แปลง "DD/MM/YYYY HH:MM" เป็น Date (คืน null ถ้ารูปแบบไม่ตรง) ── */
 function parseDocDate(text) {
@@ -27,19 +35,90 @@ function daysAgo(date) {
 }
 
 /* ══════════════════════════════════════
+   เมนูซ้าย — พับ / กาง
+══════════════════════════════════════ */
+
+/* คีย์ของ node ที่กางอยู่ เก็บลง localStorage เพื่อจำข้ามการรีเฟรช */
+function openNodeKeys() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(NAV_STATE_KEY) || "[]"));
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function saveOpenNodes() {
+  const keys = [...document.querySelectorAll(".nav-node.has-children.open")]
+    .map(n => n.querySelector(".nav-item")?.dataset.key)
+    .filter(Boolean);
+  try { localStorage.setItem(NAV_STATE_KEY, JSON.stringify(keys)); } catch (e) { /* โหมดส่วนตัว */ }
+}
+
+function toggleNavNode(btn) {
+  btn.closest(".nav-node")?.classList.toggle("open");
+  saveOpenNodes();
+}
+
+/* ซ่อน / แสดงแถบเมนูทั้งแถบ */
+function toggleNav() {
+  const narrow = window.matchMedia("(max-width: 980px)").matches;
+  if (narrow) {
+    document.body.classList.toggle("nav-open");
+    return;
+  }
+  const hidden = document.body.classList.toggle("nav-hidden");
+  try { localStorage.setItem(NAV_HIDDEN_KEY, hidden ? "1" : "0"); } catch (e) { /* โหมดส่วนตัว */ }
+}
+
+/* คลิกหมวดในเมนู = กรองตารางตามหมวดนั้น (คลิกซ้ำเพื่อกลับไปทั้งหมด) */
+function filterByNav(btn) {
+  const key = btn.dataset.key || "";
+  activeNav = (activeNav === key && key !== "") ? "" : key;
+
+  document.querySelectorAll(".nav-label").forEach(el => {
+    el.classList.toggle("active", (el.dataset.key || "") === activeNav);
+  });
+
+  /* กางหมวดแม่ให้เห็นตัวที่เลือกอยู่เสมอ */
+  if (activeNav) {
+    let node = btn.closest(".nav-node")?.parentElement?.closest(".nav-node");
+    while (node) {
+      node.classList.add("open");
+      node = node.parentElement?.closest(".nav-node");
+    }
+    saveOpenNodes();
+  }
+  if (window.matchMedia("(max-width: 980px)").matches) {
+    document.body.classList.remove("nav-open");
+  }
+  applyListFilter();
+}
+
+/* แถวเข้ากับหมวดที่เลือกไหม
+   key ว่าง        = ทุกหมวด
+   "doc"           = เอกสารทั้งหมด (ทุกใบโอนย้าย)
+   "transfer"      = ใบโอนย้ายทั้งหมด
+   "request"       = คำขอทั่วไปทั้งหมด
+   "<group>:<code>"= ประเภทเดียว */
+function matchesNav(row) {
+  if (!activeNav) return true;
+  if (activeNav === "doc") return row.dataset.group === "transfer";
+  if (activeNav.includes(":")) return row.dataset.nav === activeNav;
+  return row.dataset.group === activeNav;
+}
+
+/* ══════════════════════════════════════
    FILTER
 ══════════════════════════════════════ */
 
 function applyListFilter() {
   const term = (document.getElementById("list-search")?.value || "").trim().toLowerCase();
-  const type = document.getElementById("list-type")?.value || "";
   const days = parseInt(document.getElementById("list-days")?.value || "", 10);
 
   let shown = 0;
 
   document.querySelectorAll(".list-row").forEach(row => {
     const matchFlow = !activeFlow || row.dataset.flow === activeFlow;
-    const matchType = !type || row.dataset.type === type;
     const matchTerm = !term || (row.dataset.search || "").includes(term);
 
     let matchDate = true;
@@ -48,13 +127,14 @@ function applyListFilter() {
       matchDate = date ? daysAgo(date) < days : false;
     }
 
-    const show = matchFlow && matchType && matchTerm && matchDate;
+    const show = matchFlow && matchTerm && matchDate && matchesNav(row);
     row.style.display = show ? "" : "none";
     if (show) shown++;
   });
 
+  const hasFilter = activeFlow || activeNav || term || !Number.isNaN(days);
+
   const noMatch = document.getElementById("list-no-match");
-  const hasFilter = activeFlow || type || term || !Number.isNaN(days);
   if (noMatch) noMatch.style.display = (shown === 0 && hasFilter) ? "" : "none";
 
   const countEl = document.getElementById("list-count");
@@ -74,12 +154,16 @@ function filterByFlow(card) {
 
 function clearListFilter() {
   activeFlow = "";
-  ["list-search", "list-type", "list-days"].forEach(id => {
+  activeNav  = "";
+  ["list-search", "list-days"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
   document.querySelectorAll(".stat-card").forEach(el => {
     el.classList.toggle("active", !el.dataset.flow);
+  });
+  document.querySelectorAll(".nav-label").forEach(el => {
+    el.classList.toggle("active", !el.dataset.key);
   });
   applyListFilter();
 }
@@ -88,8 +172,24 @@ function clearListFilter() {
    INIT
 ══════════════════════════════════════ */
 
+(function initNav() {
+  const saved = openNodeKeys();
+  const nodes = document.querySelectorAll(".nav-node.has-children");
+
+  nodes.forEach(node => {
+    const key = node.querySelector(".nav-item")?.dataset.key;
+    /* ครั้งแรกที่เข้า (ยังไม่เคยบันทึก) ให้กางไว้ทั้งหมดเพื่อให้เห็นโครงสร้าง */
+    node.classList.toggle("open", saved.size ? saved.has(key) : true);
+  });
+
+  try {
+    if (localStorage.getItem(NAV_HIDDEN_KEY) === "1") {
+      document.body.classList.add("nav-hidden");
+    }
+  } catch (e) { /* โหมดส่วนตัว */ }
+})();
+
 document.getElementById("list-search")?.addEventListener("input", applyListFilter);
-document.getElementById("list-type")?.addEventListener("change", applyListFilter);
 document.getElementById("list-days")?.addEventListener("change", applyListFilter);
 
 setInterval(() => location.reload(), AUTO_REFRESH_MS);
