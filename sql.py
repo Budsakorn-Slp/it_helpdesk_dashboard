@@ -1,0 +1,381 @@
+# -*- coding: utf-8 -*-
+"""SQL ทั้งหมดของระบบ รวมไว้ที่เดียวเพื่อให้ค้นและแก้ได้ง่าย
+
+ข้อควรรู้เรื่องสคีมา:
+  • IT_HELPDESK_REQUEST.REQUEST_DATE / DATE_START / DATE_FINISH เก็บเป็น VARCHAR2
+    รูปแบบ 'DD/MM/YYYY HH24:MI' — จึงห้ามใช้ TO_CHAR() ทับ
+  • IT_HELPDESK_REQUEST.CLOSED_AT / IT_HELPDESK_APPROVER.DATE_* เป็น DATE จริง
+  • ความสัมพันธ์เอกสารทรัพย์สิน:
+      REQUEST.REQUEST_ID → TRANSFER.REQUEST_ID → (TRANSFER.ID) → ASSET.TRANSFER_ID
+"""
+
+# ── บอร์ด ────────────────────────────────────────────────────────────────────
+
+BOARD = """
+    SELECT
+        REQUEST_ID, REQUEST_DATE, REQUEST_TYPEFORM, REQUEST_CATEGORY,
+        REQUESTER_FNAME, REQUESTER_LNAME, REQUESTER_DEPT,
+        REQUESTER_TEL, REQUESTER_EMPCODE,
+        REQUEST_STATUS, REQUEST_ACTION, REQUEST_TYPEPROBLEM,
+        NVL(DBMS_LOB.SUBSTR(REQUEST_REMARK, 200, 1), ' ') AS REQUEST_REMARK,
+        IT_COMMENT, IT_COMMENT_BY, IT_COMMENT_DATE
+    FROM IT_HELPDESK_REQUEST
+    WHERE TRIM(REQUEST_TYPEFORM) = :typeform
+      AND REQUEST_STATUS != '5'
+      AND NVL(REQUEST_TYPEPROBLEM, '-') NOT LIKE 'TEST%'
+    ORDER BY REQUEST_DATE ASC
+"""
+
+#: สถานะอนุมัติล่าสุดของทุกคำขอ (1 แถวต่อ REQUEST_ID)
+LATEST_APPROVER = """
+    SELECT REQUEST_ID, STATUS FROM (
+        SELECT REQUEST_ID, STATUS,
+               ROW_NUMBER() OVER (PARTITION BY REQUEST_ID ORDER BY DATE_CREATE DESC NULLS LAST) AS rn
+        FROM IT_HELPDESK_APPROVER
+    ) WHERE rn = 1
+"""
+
+LATEST_APPROVER_FOR_REQUEST = """
+    SELECT STATUS FROM (
+        SELECT STATUS,
+               ROW_NUMBER() OVER (ORDER BY DATE_CREATE DESC NULLS LAST) AS rn
+        FROM IT_HELPDESK_APPROVER
+        WHERE REQUEST_ID = :req_id
+    ) WHERE rn = 1
+"""
+
+#: คอลัมน์ที่การ์ด "เสร็จแล้ว" ต้องใช้ — ใช้ร่วมกันระหว่างหน้าแรกกับการโหลดเพิ่ม
+_DONE_COLUMNS = """
+    REQUEST_ID, REQUEST_DATE, REQUESTER_FNAME, REQUESTER_LNAME,
+    REQUEST_STATUS, NVL(CLOSED_BY, REQUEST_ACTION) AS REQUEST_ACTION, DATE_FINISH
+"""
+
+_DONE_WHERE = """
+    WHERE TRIM(REQUEST_TYPEFORM) = :typeform
+      AND REQUEST_STATUS = '5'
+      AND NVL(REQUEST_TYPEPROBLEM, '-') NOT LIKE 'TEST%'
+"""
+
+DONE = f"""
+    SELECT * FROM (
+        SELECT {_DONE_COLUMNS}
+        FROM IT_HELPDESK_REQUEST
+        {_DONE_WHERE}
+        ORDER BY DATE_FINISH DESC
+    ) WHERE ROWNUM <= :max_rows
+"""
+
+DONE_COUNT = f"""
+    SELECT COUNT(*) FROM IT_HELPDESK_REQUEST
+    {_DONE_WHERE}
+"""
+
+DONE_PAGE = f"""
+    SELECT * FROM (
+        SELECT {_DONE_COLUMNS},
+               ROW_NUMBER() OVER (ORDER BY DATE_FINISH DESC NULLS LAST) AS rn
+        FROM IT_HELPDESK_REQUEST
+        {_DONE_WHERE}
+    ) WHERE rn > :offset AND rn <= :limit_end
+"""
+
+# ── เอกสารทรัพย์สิน (tracking) ───────────────────────────────────────────────
+
+TRANSFER_REQUEST_IDS = "SELECT DISTINCT REQUEST_ID FROM IT_HELPDESK_TRANSFER"
+
+TRACKING = """
+    SELECT r.REQUEST_ID, r.REQUEST_DATE,
+           r.REQUESTER_FNAME, r.REQUESTER_LNAME, r.REQUESTER_DEPT,
+           r.REQUEST_STATUS, r.REQUEST_TYPEPROBLEM,
+           t.TRANSFER_TYPE, t.STATUS AS TRANSFER_STATUS,
+           t.SENDER_NAME, t.RECEIVER_APPROVED_AT, t.MANAGER_APPROVE_DATE
+    FROM IT_HELPDESK_REQUEST r
+    JOIN IT_HELPDESK_TRANSFER t ON r.REQUEST_ID = t.REQUEST_ID
+    WHERE r.REQUEST_STATUS != '5'
+      AND NVL(r.REQUEST_TYPEPROBLEM, '-') NOT LIKE 'TEST%'
+    ORDER BY r.REQUEST_DATE DESC
+"""
+
+TRANSFER_FOR_REQUEST = """
+    SELECT TRANSFER_TYPE, STATUS AS TRANSFER_STATUS,
+           SENDER_NAME, RECEIVER_APPROVED_AT, MANAGER_APPROVE_DATE
+    FROM IT_HELPDESK_TRANSFER WHERE REQUEST_ID = :req_id
+"""
+
+#: ข้อมูลลายเซ็นบนตัวเอกสาร (ใช้แทน approver chain เมื่อคำขอมีเอกสารโอนย้าย)
+TRANSFER_SIGNATURES = """
+    SELECT t.TRANSFER_TYPE,
+           t.SENDER_NAME,
+           t.RECEIVER_NAME,      t.RECEIVER_APPROVED_AT,
+           t.RECEIVER_TYPE,
+           t.MANAGER_APPROVE_BY, t.MANAGER_APPROVE_DATE,
+           r.REQUESTER_FNAME,    r.REQUESTER_LNAME,
+           r.REQUEST_DATE,
+           r.CLOSED_BY,          r.CLOSED_AT
+    FROM IT_HELPDESK_TRANSFER t
+    JOIN IT_HELPDESK_REQUEST  r ON r.REQUEST_ID = t.REQUEST_ID
+    WHERE t.REQUEST_ID = :req_id
+"""
+
+# ── ลำดับการอนุมัติ (timeline) ───────────────────────────────────────────────
+
+WORKFLOW = """
+    SELECT 'receiver' AS STEP_TYPE, RECEIVER_NAME AS APPROVER_NAME,
+           RECEIVER_APPROVED_AT AS APPROVE_DATE, 'approved' AS STATUS
+    FROM IT_HELPDESK_TRANSFER
+    WHERE REQUEST_ID = :req_id AND RECEIVER_APPROVED_AT IS NOT NULL
+    UNION ALL
+    SELECT 'manager' AS STEP_TYPE, MANAGER_APPROVE_BY AS APPROVER_NAME,
+           MANAGER_APPROVE_DATE AS APPROVE_DATE, 'approved' AS STATUS
+    FROM IT_HELPDESK_TRANSFER
+    WHERE REQUEST_ID = :req_id AND MANAGER_APPROVE_DATE IS NOT NULL
+    UNION ALL
+    SELECT A.TYPE AS STEP_TYPE,
+           NVL(EMP.NAME, A.EMP_APPROVER) AS APPROVER_NAME,
+           NVL(A.DATE_UPDATE, A.DATE_CREATE) AS APPROVE_DATE,
+           LOWER(A.STATUS) AS STATUS
+    FROM IT_HELPDESK_APPROVER A
+    LEFT JOIN SBP_EMPLOYEE EMP ON TRIM(EMP.EMP_ID) = TRIM(A.EMP_APPROVER)
+    WHERE A.REQUEST_ID = :req_id
+    UNION ALL
+    SELECT 'it_close' AS STEP_TYPE, R.CLOSED_BY AS APPROVER_NAME,
+           R.CLOSED_AT AS APPROVE_DATE, 'done' AS STATUS
+    FROM IT_HELPDESK_REQUEST R
+    WHERE R.REQUEST_ID = :req_id AND R.CLOSED_AT IS NOT NULL
+    ORDER BY APPROVE_DATE ASC
+"""
+
+# ── รายละเอียดคำขอ ───────────────────────────────────────────────────────────
+
+REQUEST_DETAIL = """
+    SELECT REQUEST_ID, REQUEST_DATE, REQUEST_TYPEFORM, REQUEST_CATEGORY,
+           REQUESTER_FNAME, REQUESTER_LNAME, REQUESTER_DEPT,
+           REQUESTER_TEL, REQUESTER_EMAIL, REQUESTER_EMPCODE,
+           REQUEST_STATUS, REQUEST_ACTION, REQUEST_TYPEPROBLEM,
+           NVL(DBMS_LOB.SUBSTR(REQUEST_REMARK, 4000, 1), '')   AS REQUEST_REMARK,
+           NVL(DBMS_LOB.SUBSTR(REQUEST_SOLUTION, 4000, 1), '') AS REQUEST_SOLUTION,
+           REQUEST_FILE, IT_COMMENT, IT_COMMENT_DATE, IT_COMMENT_BY
+    FROM IT_HELPDESK_REQUEST
+    WHERE REQUEST_ID = :req_id
+"""
+
+REQUEST_STATUS_OF = "SELECT REQUEST_STATUS FROM IT_HELPDESK_REQUEST WHERE REQUEST_ID = :req_id"
+
+# ── คอมเมนต์ ─────────────────────────────────────────────────────────────────
+
+COMMENTS = """
+    SELECT COMMENT_ID, COMMENT_TEXT, COMMENT_BY, COMMENT_DATE
+    FROM IT_HELPDESK_COMMENT
+    WHERE REQUEST_ID = :req_id
+    ORDER BY COMMENT_ID ASC
+"""
+
+# หมายเหตุ: COMMENT เป็น reserved word ของ Oracle — ห้ามใช้ :comment เป็นชื่อ bind
+# (จะได้ ORA-01745) จึงต้องใช้ :comment_text
+INSERT_COMMENT = """
+    INSERT INTO IT_HELPDESK_COMMENT (REQUEST_ID, COMMENT_TEXT, COMMENT_BY, COMMENT_DATE)
+    VALUES (:req_id, :comment_text, :comment_by, TO_CHAR(SYSDATE,'DD/MM/YYYY HH24:MI'))
+"""
+
+UPDATE_LATEST_COMMENT = """
+    UPDATE IT_HELPDESK_REQUEST
+    SET IT_COMMENT      = :comment_text,
+        IT_COMMENT_DATE = TO_CHAR(SYSDATE,'DD/MM/YYYY HH24:MI'),
+        IT_COMMENT_BY   = :comment_by
+    WHERE REQUEST_ID = :req_id
+"""
+
+# ── การกระทำกับงาน ───────────────────────────────────────────────────────────
+
+START_JOB = """
+    UPDATE IT_HELPDESK_REQUEST
+    SET REQUEST_STATUS = '2',
+        REQUEST_ACTION = :worker,
+        DATE_START     = TO_CHAR(SYSDATE,'DD/MM/YYYY HH24:MI')
+    WHERE REQUEST_ID = :req_id
+"""
+
+#: ปิดงาน — ถ้าไม่ได้ระบุชื่อผู้ปิด ใช้ผู้รับผิดชอบเดิม (REQUEST_ACTION)
+CLOSE_JOB = """
+    UPDATE IT_HELPDESK_REQUEST
+    SET REQUEST_STATUS = '5',
+        DATE_FINISH    = TO_CHAR(SYSDATE,'DD/MM/YYYY HH24:MI'),
+        CLOSED_BY      = NVL(:it_name, REQUEST_ACTION),
+        CLOSED_AT      = SYSDATE
+    WHERE REQUEST_ID = :req_id
+"""
+
+CANCEL_JOB = """
+    UPDATE IT_HELPDESK_REQUEST
+    SET REQUEST_STATUS = '3', CLOSED_BY = :it_name, CLOSED_AT = SYSDATE
+    WHERE REQUEST_ID = :req_id
+"""
+
+#: หลัง IT อนุมัติ ให้สถานะเป็น "พร้อมทำ" ยกเว้นงานที่เดินหน้าไปแล้ว
+APPROVE_JOB = """
+    UPDATE IT_HELPDESK_REQUEST
+    SET REQUEST_STATUS = '1'
+    WHERE REQUEST_ID = :req_id
+      AND REQUEST_STATUS NOT IN ('2','5','3')
+"""
+
+CHANGE_STATUS = """
+    UPDATE IT_HELPDESK_REQUEST
+    SET REQUEST_STATUS = :new_status,
+        UPDATED_BY     = :actor_name,
+        UPDATED_AT     = CURRENT_TIMESTAMP
+    WHERE REQUEST_ID = :req_id
+"""
+
+CHANGE_STATUS_CLOSING = """
+    UPDATE IT_HELPDESK_REQUEST
+    SET REQUEST_STATUS = :new_status,
+        UPDATED_BY     = :actor_name,
+        UPDATED_AT     = CURRENT_TIMESTAMP,
+        CLOSED_BY      = :actor_name,
+        CLOSED_AT      = SYSDATE
+    WHERE REQUEST_ID = :req_id
+"""
+
+# ── ตารางอนุมัติ ─────────────────────────────────────────────────────────────
+
+UPDATE_APPROVER = """
+    UPDATE IT_HELPDESK_APPROVER
+    SET STATUS = :status, EMP_APPROVER = :actor, DATE_UPDATE = SYSDATE
+    WHERE REQUEST_ID = :req_id
+"""
+
+INSERT_APPROVER = """
+    INSERT INTO IT_HELPDESK_APPROVER
+        (REQUEST_ID, EMP_APPROVER, STATUS, TYPE, DATE_CREATE, DATE_UPDATE)
+    VALUES (:req_id, :actor, :status, :type, SYSDATE, SYSDATE)
+"""
+
+# ── พนักงาน IT ───────────────────────────────────────────────────────────────
+
+IT_EMPLOYEE_NAMES = "SELECT FIRST_NAME FROM IT_HELPDESK_ITEMPLOYEE ORDER BY FIRST_NAME"
+
+IT_EMPLOYEES = """
+    SELECT REQUESTER_ID, FIRST_NAME
+    FROM IT_HELPDESK_ITEMPLOYEE
+    WHERE STATUS = 'Current'
+    ORDER BY FIRST_NAME
+"""
+
+IT_EMPLOYEE_FULLNAME = """
+    SELECT TRIM(FIRST_NAME || ' ' || LAST_NAME)
+    FROM IT_HELPDESK_ITEMPLOYEE
+    WHERE REQUESTER_ID = :emp_id AND STATUS = 'Current'
+"""
+
+# ── บันทึกการเปลี่ยนแปลง (audit log) ────────────────────────────────────────
+
+INSERT_LOG = """
+    INSERT INTO IT_HELPDESK_LOG (
+        LOG_ID, REQUEST_ID, ACTION_TYPE, OLD_STATUS,
+        NEW_STATUS, ACTION_BY, ACTION_NOTE, CREATED_AT
+    ) VALUES (
+        SEQ_IT_HELPDESK_LOG.NEXTVAL, :req_id, :action_type, :old_status,
+        :new_status, :action_by, :action_note, SYSDATE
+    )
+"""
+
+LOGS_BY_TYPE = """
+    SELECT * FROM (
+        SELECT LOG_ID, ACTION_BY, ACTION_NOTE,
+               TO_CHAR(CREATED_AT, 'DD/MM/YYYY HH24:MI') AS CREATED_AT
+        FROM IT_HELPDESK_LOG
+        WHERE ACTION_TYPE = :action_type
+        ORDER BY LOG_ID DESC
+    ) WHERE ROWNUM <= :max_rows
+"""
+
+# ── Cost Center ──────────────────────────────────────────────────────────────
+
+COST_CENTERS = """
+    SELECT COST_COMPANY, COST_COSTDEP, COST_DEPARTMENT,
+           COST_COSTCENTER, COST_DESCRIPTION, COST_STATUS, CODE
+    FROM IT_HELPDESK_DEPARTMENT
+    ORDER BY COST_COMPANY, COST_COSTCENTER
+"""
+
+COST_CENTER_EXISTS = """
+    SELECT COUNT(*) FROM IT_HELPDESK_DEPARTMENT
+    WHERE UPPER(COST_COSTCENTER) = UPPER(:costcenter)
+"""
+
+INSERT_COST_CENTER = """
+    INSERT INTO IT_HELPDESK_DEPARTMENT
+        (COST_COMPANY, COST_COSTCENTER, COST_COSTDEP,
+         COST_DEPARTMENT, COST_DESCRIPTION, COST_STATUS, CODE)
+    VALUES
+        (:company, :costcenter, :costdep, :dept, :p_desc, :status, :code)
+"""
+
+UPDATE_COST_CENTER = """
+    UPDATE IT_HELPDESK_DEPARTMENT
+    SET COST_COMPANY     = :company,
+        COST_COSTDEP     = :costdep,
+        COST_DEPARTMENT  = :dept,
+        COST_DESCRIPTION = :p_desc,
+        COST_STATUS      = :status,
+        CODE             = NVL(:code, CODE)
+    WHERE UPPER(COST_COSTCENTER) = UPPER(:costcenter)
+"""
+
+# ── หน้าเอกสาร /docs (REQUEST_TYPEFORM = 4) ─────────────────────────────────
+
+#: แถวล่าสุด 1 แถวต่อ REQUEST_ID จาก IT_HELPDESK_TRANSFER
+_LATEST_TRANSFER = """
+    SELECT REQUEST_ID, TRANSFER_TYPE, TRANSFER_TYPE_NAME, STATUS,
+           ROW_NUMBER() OVER (PARTITION BY REQUEST_ID
+                              ORDER BY UPDATED_AT DESC NULLS LAST, ID DESC) AS rn
+    FROM IT_HELPDESK_TRANSFER
+"""
+
+DOCS_LIST = f"""
+    SELECT
+        r.REQUEST_ID, r.REQUEST_DATE,
+        r.REQUESTER_FNAME, r.REQUESTER_LNAME, r.REQUESTER_DEPT,
+        r.REQUEST_STATUS, r.REQUEST_TYPEPROBLEM,
+        NVL(DBMS_LOB.SUBSTR(r.REQUEST_REMARK, 400, 1), '') AS REQUEST_REMARK,
+        r.ASSET_CODE, r.ASSET_NAME,
+        NVL(NULLIF(TRIM(r.CLOSED_BY), ''),
+            NVL(NULLIF(TRIM(r.APPROVE_IT_BY), ''),
+                NULLIF(TRIM(r.REQUEST_TEAM), ''))) AS OWNER_NAME,
+        t.TRANSFER_TYPE, t.TRANSFER_TYPE_NAME, t.STATUS AS TRANSFER_STATUS
+    FROM IT_HELPDESK_REQUEST r
+    LEFT JOIN ({_LATEST_TRANSFER}) t ON r.REQUEST_ID = t.REQUEST_ID AND t.rn = 1
+    WHERE TRIM(r.REQUEST_TYPEFORM) = :typeform
+      AND NVL(r.REQUEST_TYPEPROBLEM, '-') NOT LIKE 'TEST%'
+    ORDER BY
+        SUBSTR(r.REQUEST_DATE, 7, 4) || SUBSTR(r.REQUEST_DATE, 4, 2) ||
+        SUBSTR(r.REQUEST_DATE, 1, 2) || SUBSTR(r.REQUEST_DATE, 12, 5)
+        DESC NULLS LAST
+"""
+
+DOCS_DETAIL = f"""
+    SELECT
+        r.REQUEST_ID, r.REQUEST_DATE, r.REQUEST_CATEGORY, r.REQUEST_TYPEPROBLEM,
+        r.REQUESTER_FNAME, r.REQUESTER_LNAME, r.REQUESTER_DEPT,
+        r.REQUESTER_TEL, r.REQUESTER_EMAIL, r.REQUESTER_EMPCODE,
+        r.REQUEST_STATUS,
+        NVL(DBMS_LOB.SUBSTR(r.REQUEST_REMARK, 4000, 1), '') AS REQUEST_REMARK,
+        r.ASSET_CODE, r.ASSET_NAME, r.ASSET_SERIAL,
+        NVL(NULLIF(TRIM(r.CLOSED_BY), ''),
+            NVL(NULLIF(TRIM(r.APPROVE_IT_BY), ''),
+                NULLIF(TRIM(r.REQUEST_TEAM), ''))) AS OWNER_NAME,
+        t.TRANSFER_TYPE, t.TRANSFER_TYPE_NAME, t.STATUS AS TRANSFER_STATUS
+    FROM IT_HELPDESK_REQUEST r
+    LEFT JOIN ({_LATEST_TRANSFER}) t ON r.REQUEST_ID = t.REQUEST_ID AND t.rn = 1
+    WHERE r.REQUEST_ID = :req_id
+"""
+
+DOCS_ASSETS = """
+    SELECT a.ITEM_NO, a.ASSET_CODE, a.ASSET_NAME, a.ASSET_REMARK, a.TRANSFER_ID
+    FROM IT_HELPDESK_ASSET a
+    WHERE a.TRANSFER_ID IN (
+        SELECT ID FROM IT_HELPDESK_TRANSFER WHERE REQUEST_ID = :req_id
+    )
+    ORDER BY a.TRANSFER_ID ASC, a.ITEM_NO ASC
+"""

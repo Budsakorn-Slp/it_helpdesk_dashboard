@@ -1,0 +1,32 @@
+# ── ความลับ — ห้ามขึ้น git เด็ดขาด ──
+.env
+.env.*
+!.env.example
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ── virtualenv ──
+.venv/
+venv/
+venv*/
+env/
+ENV/
+
+# ── IDE / OS ──
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ── ไฟล์ชั่วคราว / สำรอง ──
+bak/
+*.bak
+*_bak*.py
+*_bak*.html
+*.log

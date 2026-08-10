@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เพิ่มข้อมูล Cost Center — IT Helpdesk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Kanit:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cost_center.css') }}">
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+    </div>
+    <div><b>IT Helpdesk</b><span>Monitor Board</span></div>
+  </div>
+  <div class="menu-label">MAIN MENU</div>
+  <div class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+    <div><div>Cost Center</div><div class="meta">เพิ่มข้อมูล Cost Center</div></div>
+    <span class="chev">›</span>
+  </div>
+  <div class="nav-item" onclick="location.href='/'">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+    <div><div>Dashboard</div></div>
+  </div>
+  <div class="side-foot">IT Helpdesk Dashboard · v1.0</div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- Page Header -->
+  <div class="page-head">
+    <div class="titlewrap">
+      <div class="picon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+      </div>
+      <div>
+        <h1>เพิ่มข้อมูล Cost Center</h1>
+        <div class="sub">เพิ่ม / อัปเดตข้อมูลแผนกเข้าตาราง IT_HELPDESK_DEPARTMENT</div>
+      </div>
+    </div>
+    <!-- Operator -->
+    <div class="operator">
+      <div class="av" id="opAvatar">?</div>
+      <div style="flex:1">
+        <div class="lab">ผู้ดำเนินการ (IT)</div>
+        <select id="operator">
+          <option value="">— กรุณาเลือกผู้ดำเนินการ —</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Op Hint -->
+  <div id="op-hint">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0;margin-top:1px">
+      <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+    </svg>
+    กรุณาเลือก <b>ผู้ดำเนินการ (IT)</b> ที่มุมขวาบนก่อน จึงจะสามารถเพิ่มข้อมูลได้
+  </div>
+
+  <!-- Content Area -->
+  <div id="content-area" style="display:none">
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab" data-tab="single">
+        <!-- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> -->
+        เพิ่มทีละรายการ
+      </div>
+      <div class="tab active" data-tab="bulk">
+        <!-- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg> -->
+        อัปโหลดจาก Excel
+      </div>
+    </div>
+
+    <!-- ── Pane: Single ── -->
+    <div class="pane" id="pane-single">
+      <div class="card">
+        <div class="card-h">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--indigo-500)" stroke-width="2" style="width:20px;height:20px"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18"/></svg>
+          <h2>กรอกข้อมูล Cost Center</h2>
+          <span class="badge">7 ฟิลด์</span>
+        </div>
+        <div class="card-b">
+          <div class="grid">
+            <div class="field">
+              <label>บริษัท <span class="req">*</span> <span class="map">COST_COMPANY</span></label>
+              <select class="fld" id="f_company">
+                <option value="">— เลือกบริษัท —</option>
+                <option>SBI</option><option>SBH</option><option>GTT</option><option>SBDS</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Cost Center <span class="req">*</span> <span class="map">COST_COSTCENTER</span></label>
+              <input type="text" id="f_costcenter" placeholder="เช่น 9G01000001" autocomplete="off">
+              <div class="hint">รหัสนี้ <b>ห้ามซ้ำ</b> — เป็น Unique Key ในฐานข้อมูล</div>
+            </div>
+            <div class="field">
+              <label>รหัสแผนก <span class="req">*</span> <span class="map">COST_COSTDEP</span></label>
+              <input type="text" id="f_costdep" placeholder="เช่น 9G01000000" autocomplete="off">
+            </div>
+            <div class="field">
+              <label>ชื่อแผนก <span class="req">*</span> <span class="map">COST_DEPARTMENT</span></label>
+              <input type="text" id="f_department" placeholder="เช่น 9G Sales & Operation (SBDS)" autocomplete="off">
+            </div>
+            <div class="field full">
+              <label>รายละเอียด <span class="map">COST_DESCRIPTION</span></label>
+              <input type="text" id="f_desc" placeholder="เช่น SUPPORT, Ze BI - SBDS CDC" autocomplete="off">
+            </div>
+            <div class="field">
+              <label>สถานะ <span class="map">COST_STATUS</span></label>
+              <select class="fld" id="f_status"><option>Active</option><option>Block</option></select>
+            </div>
+            <div class="field">
+              <label>Code <span class="map">CODE</span></label>
+              <input type="text" id="f_code" placeholder="(เว้นว่างได้)" autocomplete="off">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-ghost" onclick="clearForm()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              ล้างฟอร์ม
+            </button>
+            <button class="btn btn-primary" id="btn-save-single" onclick="saveSingle()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+              บันทึกข้อมูล
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Pane: Bulk ── -->
+    <div class="pane show" id="pane-bulk">
+      <div class="card">
+        <div class="card-h">
+          <svg viewBox="0 0 24 24" fill="none" stroke="var(--indigo-500)" stroke-width="2" style="width:20px;height:20px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          <h2>อัปโหลดจากไฟล์ Excel</h2>
+          <span class="badge">.xlsx / .xls / .csv</span>
+        </div>
+        <div class="card-b">
+
+          <!-- Drop zone -->
+          <div class="drop" id="drop-zone"
+               onclick="document.getElementById('xlfile').click()"
+               ondragover="onDragOver(event)"
+               ondragleave="onDragLeave(event)"
+               ondrop="onDrop(event)">
+            <input type="file" id="xlfile" accept=".xlsx,.xls,.csv" hidden onchange="pickFile(this)">
+            <div class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+            </div>
+            <b>คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวาง</b>
+            <p>รองรับ .xlsx, .xls, .csv ที่ตรงกับ Template</p>
+            <div class="file-name" id="fileName"></div>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="up-row">
+
+            <button class="btn btn-ghost" onclick="downloadTemplate()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg>
+              ดาวน์โหลด Template
+            </button>
+            <button class="btn btn-ghost" id="btn-clear-file" onclick="clearFile()" style="display:none">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              ล้างไฟล์
+            </button>
+            <button class="btn btn-primary" id="btn-upload"  style="margin-left: auto" onclick="uploadFile()">
+              อัปโหลดเข้าระบบ
+            </button>
+          </div>
+
+          <!-- Column hint -->
+          <div class="tmpl-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <div>
+              <b>ลำดับคอลัมน์ใน Template:</b>
+              COMPANY · COST_DEPARTMENT (รหัส) · DEPARTMENT (ชื่อ) · COSTCENTER · COST_DESCRIPTION · COST_STATUS<br>
+              ระบบจะตรวจ Cost Center ซ้ำอัตโนมัติและข้ามแถวที่ซ้ำโดยไม่หยุดกระบวนการ
+            </div>
+          </div>
+
+          <!-- Progress bar (แสดงระหว่าง upload) -->
+          <div class="bulk-progress" id="bulk-progress">
+            <div class="progress-label">
+              <span id="prog-label">กำลังบันทึก...</span>
+              <span id="prog-pct">0%</span>
+            </div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill" id="prog-bar"></div>
+            </div>
+            <div class="progress-result" id="prog-result"></div>
+          </div>
+
+          <!-- Error detail table (แสดงหลัง upload เสร็จ ถ้ามี error) -->
+          <div id="error-detail" style="display:none;margin-top:14px">
+            <div style="font-size:13px;font-weight:600;color:var(--red-tx);margin-bottom:8px;display:flex;align-items:center;gap:6px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+              รายการที่มีปัญหา — กรุณาตรวจสอบและแก้ไขไฟล์ก่อนอัปโหลดใหม่
+            </div>
+            <div class="tbl-wrap">
+              <div class="tbl-scroll">
+                <table>
+                  <thead><tr>
+                    <th>แถวที่</th>
+                    <th>COMPANY</th>
+                    <th>COSTCENTER</th>
+                    <th>DEPARTMENT</th>
+                    <th>ประเภทปัญหา</th>
+                    <th>รายละเอียด</th>
+                  </tr></thead>
+                  <tbody id="error-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Preview table (แสดงหลัง parse ไฟล์) -->
+          <div id="bulk-preview"></div>
+
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /#content-area -->
+
+  <!-- Log Table -->
+  <div class="section-title">
+    ประวัติการแก้ไขล่าสุด
+    <svg viewBox="0 0 24 24" fill="none" stroke="var(--indigo-400)" stroke-width="2" style="width:18px;height:18px"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+  </div>
+  <div class="tbl-wrap">
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr>
+          <th>วันที่ / เวลา</th>
+          <th>ผู้ดำเนินการ</th>
+          <th>Company</th>
+          <th>Cost Department</th>
+          <th>Department</th>
+          <th>Cost Center</th>
+          <th>Cost Description</th>
+          <th>Cost Status</th>
+        </tr></thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script src="{{ url_for('static', filename='js/cost_center.js') }}"></script>
+</body>
+</html>

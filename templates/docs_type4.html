@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เบิก / ยืม / โอนย้ายทรัพย์สิน — IT Helpdesk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Kanit:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/docs.css') }}">
+</head>
+<body>
+
+<!-- ════════════ SIDEBAR ════════════ -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="logo">SB</div>
+    <div><b>IT Helpdesk</b><span>Asset Management</span></div>
+  </div>
+
+  <div class="menu-label">เมนูหลัก</div>
+  <a class="nav-item active" href="javascript:void(0)" onclick="setNav(this,'')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    เอกสารทั้งหมด
+  </a>
+  <a class="nav-item" href="javascript:void(0)" onclick="setNav(this,'wait')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+    เอกสารรออนุมัติ <span class="count">{{ stats.wait }}</span>
+  </a>
+    <a class="nav-item" href="javascript:void(0)" onclick="setNav(this,'ready')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    เอกสารพร้อมทำ <span class="count">{{ stats.ready }}</span>
+    </a>
+    <a class="nav-item" href="javascript:void(0)" onclick="setNav(this,'active')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+    เอกสารกำลังทำ <span class="count">{{ stats.active }}</span>
+    </a>
+  <a class="nav-item" href="javascript:void(0)" onclick="setNav(this,'done')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg>
+    เอกสารเสร็จสิ้น <span class="count">{{ stats.done }}</span>
+  </a>
+  <a class="nav-item" href="javascript:void(0)" onclick="setNav(this,'cancel')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
+    เอกสารยกเลิก <span class="count">{{ stats.cancel }}</span>
+  </a>
+
+  <div class="nav-sep"></div>
+  <div class="menu-label">ตั้งค่าระบบ</div>
+  <a class="nav-item" href="javascript:void(0)" onclick="setNav(this,'','yes')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+    ประเภทใบโอนย้าย
+  </a>
+  <!-- <a class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17 2 2 0 0 1-4 0 1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    ตั้งค่า
+  </a> -->
+
+  <div class="side-foot">IT Helpdesk · Asset v1.0</div>
+</aside>
+
+<!-- ════════════ APP ════════════ -->
+<div class="app">
+
+  <!-- ── TOP BAR ── -->
+  <header class="topbar">
+    <h1>เบิก / ยืม / โอนย้ายทรัพย์สิน</h1>
+    <div class="tb-right">
+      <div class="tb-clock">
+        <div class="t" id="clock">--:--:--</div>
+        <div class="d" id="dateTxt">—</div>
+      </div>
+      <div class="tb-bell">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="dot">{{ stats.wait }}</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── MAIN ── -->
+  <main class="main">
+
+    <div class="page-head">
+      <div>
+        <h2>เอกสารทั้งหมด</h2>
+        <div class="sub">จัดการเอกสารเบิก / ยืม / โอนย้ายทรัพย์สิน</div>
+      </div>
+      <div class="head-actions">
+        <button class="btn btn-ghost" onclick="location.reload()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+          รีเฟรช
+        </button>
+      </div>
+    </div>
+
+    {% if error %}
+    <div style="background:var(--red-bg);color:var(--red-tx);border:1px solid #f3c0c0;border-radius:12px;padding:12px 16px;margin-bottom:18px;font-size:13.5px">
+      เชื่อมต่อฐานข้อมูลไม่สำเร็จ: {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- ── STAT CARDS ── -->
+    <div class="stats">
+      <div class="stat all">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+        <div><div class="num">{{ stats.all }}</div><div class="lab">เอกสารทั้งหมด</div></div>
+      </div>
+      <div class="stat wait">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></div>
+        <div><div class="num">{{ stats.wait }}</div><div class="lab">รออนุมัติ</div></div>
+      </div>
+    <div class="stat ready" onclick="setNav(document.querySelector('.nav-item:nth-child(4)'),'ready')">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+    <div><div class="num">{{ stats.ready }}</div><div class="lab">พร้อมทำ</div></div>
+    </div>
+    <div class="stat active">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg></div>
+    <div><div class="num">{{ stats.active }}</div><div class="lab">กำลังทำ</div></div>
+    </div>
+      <div class="stat done">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg></div>
+        <div><div class="num">{{ stats.done }}</div><div class="lab">เสร็จสิ้น</div></div>
+      </div>
+      <div class="stat cancel">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg></div>
+        <div><div class="num">{{ stats.cancel }}</div><div class="lab">ยกเลิก</div></div>
+      </div>
+    </div>   
+
+    <!-- ── TOOLBAR ── -->
+    <div class="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchBox" placeholder="ค้นหาเลขที่เอกสาร, ชื่อผู้ขอ, หัวเรื่อง..." oninput="filterRows()">
+      </div>
+      <select class="flt" id="fType" onchange="filterRows()"><option value="">ประเภทเอกสาร</option><option>เบิก</option><option>ยืม</option><option>โอนย้าย</option><option>ส่งซ่อม</option><option>ตัดบัญชี</option><option>ขาย</option></select>
+      <select class="flt" id="fStatus" onchange="filterRows()"><option value="">สถานะ</option><option>รออนุมัติ</option><option>กำลังทำ</option><option>พร้อมทำ</option><option>เสร็จสิ้น</option><option>ยกเลิก</option></select>
+      <select class="flt" id="fDate" onchange="filterRows()">
+        <option value="">ช่วงวันที่</option>
+        <option value="1">วันนี้</option>
+        <option value="3">3 วันล่าสุด</option>
+        <option value="7">7 วันล่าสุด</option>
+        <option value="30">1 เดือนล่าสุด</option>
+      </select>
+      <button class="btn btn-sm flt-clear" onclick="clearFilter()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+        ล้างตัวกรอง
+      </button>
+    </div>
+
+    <!-- ── TABLE ── -->
+    <div class="tbl-wrap">
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-chk"><input type="checkbox" class="chk" id="chkAll"></th>
+              <th>เลขที่เอกสาร</th>
+              <th>วันที่</th>
+              <th>ผู้ขอ</th>
+              <th>ประเภท</th>
+              <th>เรื่อง</th>
+              <th>สถานะ</th>
+              <th>ผู้รับผิดชอบ</th>
+              <th style="text-align:right">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            {% for r in rows %}
+            <tr onclick="openDetail(this)"
+                data-id="{{ r.id }}"
+                data-group="{{ r.status_group }}"
+                data-doc="{{ 'yes' if r.is_doc_process else 'no' }}"
+                data-date="{{ r.date_full }}"
+                data-req="{{ r.requester }}"
+                data-dept="{{ r.dept }}"
+                data-type="{{ r.type_label }}"
+                data-typecls="{{ r.type_cls }}"
+                data-title="{{ r.title }}"
+                data-remark="{{ r.remark }}"
+                data-status="{{ r.status_label }}"
+                data-statuscls="{{ r.status_cls }}"
+                data-asset-code="{{ r.asset_code }}"
+                data-asset-name="{{ r.asset_name }}"
+                data-owner="{{ r.owner }}">
+              <td><input type="checkbox" class="chk row-chk" onclick="event.stopPropagation()"></td>
+              <td><span class="doc-id">{{ r.id }}</span></td>
+              <td>{{ r.date }}</td>
+              <td class="cell-2"><b>{{ r.requester }}</b><div class="t2">{{ r.dept }}</div></td>
+              <td>
+                <span class="type {{ r.type_cls }}">
+                  {% if r.type_cls == 'transfer' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                  {% elif r.type_cls == 'borrow' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                  {% elif r.type_cls == 'repair' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                  {% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>{% endif %}
+                  {{ r.type_label }}
+                </span>
+              </td>
+              <td class="cell-2"><b>{{ r.title }}</b><div class="t2">{{ r.subtitle }}</div></td>
+              <td><span class="pill {{ r.status_cls }}">{{ r.status_label }}</span></td>
+              <td>
+                {% if r.owner %}
+                <div class="owner"><div class="av">{{ r.owner_initial }}</div><div class="nm"><b>{{ r.owner }}</b></div></div>
+                {% else %}
+                <span style="color:var(--ink-faint)">-</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="act">
+                  <button class="ico-btn" title="ดูรายละเอียด" onclick="event.stopPropagation();openDetail(this.closest('tr'))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                  <div class="menu-wrap"><button class="ico-btn" onclick="event.stopPropagation();toggleMenu(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button></div>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="9" style="text-align:center;padding:46px;color:var(--ink-faint)">ไม่พบเอกสารประเภทนี้</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="pager">
+      <select class="flt psize"><option>10</option><option>25</option><option>50</option></select>
+      <button class="pp active">1</button>
+    </div>
+
+  </main>
+</div>
+
+<!-- ════════════ ACTION DROPDOWN (template) ════════════ -->
+<template id="menuTpl">
+  <div class="menu">
+    <div class="mi" data-act="detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>ดูรายละเอียด</div>
+    <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>แก้ไขเอกสาร</div>
+    <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>เปลี่ยนสถานะ<span class="chev">›</span></div>
+    <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>เปลี่ยนผู้รับผิดชอบ</div>
+    <div class="msep"></div>
+    <div class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><polyline points="9 12 11 14 15 10"/></svg>ปิดงาน</div>
+    <div class="msep"></div>
+    <div class="mi danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>ยกเลิกเอกสาร</div>
+  </div>
+</template>
+
+<!-- ════════════ DETAIL PANEL (มุมล่างซ้าย) ════════════ -->
+<div class="detail-overlay" id="overlay" onclick="closeDetail()"></div>
+<aside class="detail" id="detail">
+  <div class="d-head">
+    <h3>รายละเอียดเอกสาร</h3>
+    <button class="x" onclick="closeDetail()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+
+  <div class="d-body">
+    <div class="d-docno">
+      <b id="dDocNo">เอกสารเลขที่ —</b>
+      <span class="pill ready" id="dStatus">—</span>
+    </div>
+
+    <!-- คอลัมน์ซ้าย : ข้อมูลเอกสาร -->
+    <div class="d-col">
+      <div class="d-row"><div class="k">ประเภทเอกสาร</div><div class="v"><span class="type transfer" id="dType">—</span></div></div>
+      <div class="d-row"><div class="k">วันที่สร้างเอกสาร</div><div class="v" id="dDate">—</div></div>
+      <div class="d-row"><div class="k">ผู้ขอ</div><div class="v" id="dReq">—</div></div>
+      <div class="d-row"><div class="k">แผนก</div><div class="v" id="dDept">—</div></div>
+      <div class="d-row"><div class="k">หัวเรื่อง</div><div class="v" id="dTitle">—</div></div>
+      <div class="d-row"><div class="k">รายละเอียด</div><div class="desc" id="dRemark">—</div></div>
+    </div>
+
+    <!-- คอลัมน์ขวา : ทรัพย์สิน + (ส่วนที่จะเชื่อม /api/detail ขั้นถัดไป) -->
+    <div class="d-col">
+      <h4>รายการทรัพย์สิน</h4>
+      <table class="asset-tbl" style="margin-bottom:18px">
+        <thead><tr><th>รหัสทรัพย์สิน</th><th>ชื่อทรัพย์สิน</th></tr></thead>
+        <tbody id="dAsset"><tr><td>—</td><td>—</td></tr></tbody>
+      </table>
+
+      <h4>ผู้รับผิดชอบ</h4>
+      <div class="d-person" id="dOwner"><div class="av">—</div><div class="pn"><b>—</b></div></div>
+      <h4 style="margin-top:6px">ประวัติการดำเนินการ</h4>
+      <div class="tl" id="dTimeline">
+        <div class="tl-item wait"><span class="dot"></span><div class="tt" style="color:var(--ink-faint);font-weight:500">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-foot">
+    <button class="btn btn-ghost btn-sm">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      ดาวน์โหลด PDF
+    </button>
+    <button class="btn btn-ghost btn-sm">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+      เปลี่ยนผู้รับผิดชอบ
+    </button>
+    <button class="btn btn-green btn-sm grow">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      ดำเนินการต่อ
+    </button>
+  </div>
+</aside>
+
+<script src="{{ url_for('static', filename='js/docs.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+flask>=3.0.0
+python-dotenv>=1.0.0
+
+# Oracle driver — ติดตั้งตัวใดตัวหนึ่งก็พอ (db.py เลือกให้อัตโนมัติ)
+#   oracledb  = ตัวใหม่ที่ Oracle ดูแลอยู่  (แนะนำ)
+#   cx_Oracle = ตัวเดิม เก็บไว้เผื่อเครื่องที่ยังใช้อยู่
+oracledb>=2.0.0
+cx_Oracle>=8.3

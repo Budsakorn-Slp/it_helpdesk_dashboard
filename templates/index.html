@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>IT Helpdesk Dashboard</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}" />
+  </head>
+  <body>
+
+    <!-- ── SIDEBAR ── -->
+    <div class="sidebar">
+      <div class="sidebar-section-label">MAIN MENU</div>
+
+      <a href="{{ url_for('cost_center.page') }}" class="sidebar-item">
+        <div class="sidebar-item-icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/>
+            <line x1="19" y1="8" x2="19" y2="14"/>
+            <line x1="16" y1="11" x2="22" y2="11"/>
+          </svg>
+        </div>
+        <div class="sidebar-item-info">
+          <div class="sidebar-item-title">Add Cost Center</div>
+          <div class="sidebar-item-sub">เพิ่มข้อมูล Cost Center</div>
+        </div>
+        <div class="sidebar-item-arrow">
+          <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- ── MAIN CONTENT ── -->
+    <div class="main-content">
+
+      <div class="top">
+        <div class="top-logo">
+          <svg viewBox="0 0 24 24">
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+        </div>
+        <h1>IT Helpdesk Monitor Board</h1>
+        <p>เลือกหน้าจอที่ต้องการแสดงบนมอนิเตอร์</p>
+      </div>
+
+      <div class="grid">
+
+        <!-- แถว 1 -->
+        <a href="/network" class="card">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="2" y1="12" x2="22" y2="12"/>
+              <path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/>
+            </svg>
+          </div>
+          <div class="card-title">Network / Internet</div>
+          <div class="card-sub">แจ้งปัญหาอินเตอร์เน็ต/โทรศัพท์</div>
+          <div class="card-tag">Network Admin</div>
+          <div class="card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+        </a>
+
+        <a href="/system" class="card">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
+          </div>
+          <div class="card-title">System</div>
+          <div class="card-sub">ขอสิทธิ์การเข้าถึง</div>
+          <div class="card-tag">System Admin</div>
+          <div class="card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+        </a>
+
+        <a href="/support" class="card">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+          </div>
+          <div class="card-title">Support</div>
+          <div class="card-sub">แจ้งปัญหาคอมพิวเตอร์</div>
+          <div class="card-tag">IT Support</div>
+          <div class="card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+        </a>
+
+        <!-- แถว 2 -->
+        <div class="grid-row2">
+          <a href="/asset" class="card">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8">
+                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                <line x1="12" y1="22.08" x2="12" y2="12"/>
+              </svg>
+            </div>
+            <div class="card-title">เบิก / ยืม / โอนย้าย</div>
+            <div class="card-sub">เบิก / ยืม / โอนย้าย</div>
+            <div class="card-tag">IT Asset</div>
+            <div class="card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          </a>
+
+          <a href="/newreq" class="card">
+            <div class="card-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="12" y1="18" x2="12" y2="12"/>
+                <line x1="9" y1="15" x2="15" y2="15"/>
+              </svg>
+            </div>
+            <div class="card-title">ขอแก้ไข / ขอโปรแกรมใหม่</div>
+            <div class="card-sub">เว็บไซต์และโปรแกรม</div>
+            <div class="card-tag">Inbound / Outbound / Web Analyst</div>
+            <div class="card-arrow"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+          </a>
+        </div>
+
+      </div>
+
+      <div class="footer">IT Helpdesk Dashboard</div>
+
+    </div>
+
+  </body>
+</html>
