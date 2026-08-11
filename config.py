@@ -188,6 +188,16 @@ def doc_status(code):
     return label, cls, group
 
 
+def type_label(group, code):
+    """(group, code) ที่ SQL คำนวณมา → (ป้ายไทย, css class)"""
+    if group == GROUP_TRANSFER:
+        info = TRANSFER_DOC_TYPES.get(code)
+        return (info["label"], info["cls"]) if info else (code or "-", "transfer")
+    info = PLAIN_REQUEST_TYPES.get(code)
+    return ((info["label"], info["cls"]) if info
+            else (UNKNOWN_REQUEST_TYPE["label"], UNKNOWN_REQUEST_TYPE["cls"]))
+
+
 def transfer_type(transfer_type_code, typeproblem=None):
     """TRANSFER_TYPE (+ REQUEST_TYPEPROBLEM สำรอง) → (label, css class)"""
     _, _, label, cls = classify_document(transfer_type_code, typeproblem)

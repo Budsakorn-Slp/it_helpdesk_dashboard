@@ -384,6 +384,92 @@ DOCS_DETAIL = f"""
     WHERE r.REQUEST_ID = :req_id
 """
 
+# ── หน้ารายการเอกสาร /asset (กรอง เรียง แบ่งหน้า ทำใน SQL ทั้งหมด) ──────────
+#
+# คำนวณ 4 อย่างนี้ใน SQL เพื่อให้กรองและเรียงได้โดยไม่ต้องดึงทุกแถวมาก่อน:
+#   DOC_GROUP         transfer = มีใบโอนย้าย, request = คำขอทั่วไป
+#   DOC_CODE          ประเภทเอกสาร (รวม BORROW_DIRECT เข้ากับ BORROW)
+#   WORKFLOW_STATUS   สถานะงานบนบอร์ด (ตรงกับ services.boards.map_workflow_status)
+#   TRACKING_COMPLETE ลายเซ็นบนเอกสารครบหรือยัง (ตรงกับ services.tracking.is_complete)
+#
+# SORT_DATE แปลง REQUEST_DATE ที่เป็น VARCHAR2 'DD/MM/YYYY HH24:MI'
+# ให้เป็น 'YYYYMMDDHH:MI' ซึ่งเรียงด้วยการเทียบสตริงได้
+ASSET_LIST_BASE = """
+    SELECT
+        r.REQUEST_ID, r.REQUEST_DATE,
+        r.REQUESTER_FNAME, r.REQUESTER_LNAME, r.REQUESTER_DEPT,
+        r.REQUEST_STATUS, r.REQUEST_TYPEPROBLEM,
+        NVL(DBMS_LOB.SUBSTR(r.REQUEST_REMARK, 400, 1), '') AS REQUEST_REMARK,
+        r.ASSET_CODE, r.ASSET_NAME,
+        NVL(NULLIF(TRIM(r.CLOSED_BY), ''),
+            NVL(NULLIF(TRIM(r.APPROVE_IT_BY), ''),
+                NULLIF(TRIM(r.REQUEST_TEAM), ''))) AS OWNER_NAME,
+        t.TRANSFER_TYPE, t.TRANSFER_TYPE_NAME, t.TRANSFER_STATUS,
+
+        SUBSTR(r.REQUEST_DATE, 7, 4) || SUBSTR(r.REQUEST_DATE, 4, 2) ||
+        SUBSTR(r.REQUEST_DATE, 1, 2) || SUBSTR(r.REQUEST_DATE, 12, 5) AS SORT_DATE,
+
+        CASE WHEN t.REQUEST_ID IS NOT NULL THEN 'transfer' ELSE 'request' END AS DOC_GROUP,
+
+        CASE
+            WHEN t.REQUEST_ID IS NOT NULL THEN
+                CASE WHEN UPPER(TRIM(t.TRANSFER_TYPE)) = 'BORROW_DIRECT' THEN 'BORROW'
+                     ELSE UPPER(TRIM(t.TRANSFER_TYPE)) END
+            WHEN UPPER(TRIM(NVL(r.REQUEST_TYPEPROBLEM, ''))) IN ('BORROW', 'BORROW_DIRECT') THEN 'BORROW'
+            WHEN UPPER(TRIM(NVL(r.REQUEST_TYPEPROBLEM, ''))) = 'WITHDRAW' THEN 'WITHDRAW'
+            ELSE 'OTHER'
+        END AS DOC_CODE,
+
+        CASE
+            WHEN NVL(a.STATUS, 'Waiting') = 'Reject' OR TRIM(r.REQUEST_STATUS) = '3' THEN 'cancel'
+            WHEN TRIM(r.REQUEST_STATUS) = '5'        THEN 'done'
+            WHEN t.REQUEST_ID IS NOT NULL            THEN 'tracking'
+            WHEN TRIM(r.REQUEST_STATUS) = '2'        THEN 'doing'
+            WHEN NVL(a.STATUS, 'Waiting') = 'Approve' THEN 'ready'
+            ELSE 'waiting'
+        END AS WORKFLOW_STATUS,
+
+        CASE UPPER(TRIM(t.TRANSFER_TYPE))
+            WHEN 'TRANSFER' THEN
+                CASE WHEN t.RECEIVER_APPROVED_AT IS NOT NULL
+                      AND TRIM(NVL(t.SENDER_NAME, '')) IS NOT NULL THEN 1 ELSE 0 END
+            WHEN 'BORROW' THEN CASE WHEN t.RECEIVER_APPROVED_AT IS NOT NULL THEN 1 ELSE 0 END
+            WHEN 'REPAIR' THEN CASE WHEN t.RECEIVER_APPROVED_AT IS NOT NULL THEN 1 ELSE 0 END
+            WHEN 'DISPOSE' THEN
+                CASE WHEN UPPER(TRIM(NVL(t.TRANSFER_STATUS, ''))) = 'WAITING_IT'
+                       OR t.MANAGER_APPROVE_DATE IS NOT NULL THEN 1 ELSE 0 END
+            WHEN 'SALE' THEN
+                CASE WHEN UPPER(TRIM(NVL(t.TRANSFER_STATUS, ''))) = 'WAITING_IT'
+                       OR t.MANAGER_APPROVE_DATE IS NOT NULL THEN 1 ELSE 0 END
+            ELSE 0
+        END AS TRACKING_COMPLETE
+
+    FROM IT_HELPDESK_REQUEST r
+    LEFT JOIN (
+        SELECT REQUEST_ID, TRANSFER_TYPE, TRANSFER_TYPE_NAME,
+               STATUS AS TRANSFER_STATUS, SENDER_NAME,
+               RECEIVER_APPROVED_AT, MANAGER_APPROVE_DATE,
+               ROW_NUMBER() OVER (PARTITION BY REQUEST_ID
+                                  ORDER BY UPDATED_AT DESC NULLS LAST, ID DESC) AS rn
+        FROM IT_HELPDESK_TRANSFER
+    ) t ON r.REQUEST_ID = t.REQUEST_ID AND t.rn = 1
+    LEFT JOIN (
+        SELECT REQUEST_ID, STATUS,
+               ROW_NUMBER() OVER (PARTITION BY REQUEST_ID
+                                  ORDER BY DATE_CREATE DESC NULLS LAST) AS rn
+        FROM IT_HELPDESK_APPROVER
+    ) a ON r.REQUEST_ID = a.REQUEST_ID AND a.rn = 1
+    WHERE TRIM(r.REQUEST_TYPEFORM) = :typeform
+      AND NVL(r.REQUEST_TYPEPROBLEM, '-') NOT LIKE 'TEST%'
+"""
+
+#: จำนวนเอกสารแยกตามสถานะและหมวด — ใช้ทำตัวเลขบนเมนูซ้าย (ไม่ขึ้นกับหน้าที่เปิดอยู่)
+ASSET_LIST_STATS = f"""
+    SELECT WORKFLOW_STATUS, DOC_GROUP, DOC_CODE, COUNT(*) AS CNT
+    FROM ({ASSET_LIST_BASE})
+    GROUP BY WORKFLOW_STATUS, DOC_GROUP, DOC_CODE
+"""
+
 DOCS_ASSETS = """
     SELECT a.ITEM_NO, a.ASSET_CODE, a.ASSET_NAME, a.ASSET_REMARK, a.TRANSFER_ID
     FROM IT_HELPDESK_ASSET a

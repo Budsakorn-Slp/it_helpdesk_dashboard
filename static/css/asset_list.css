@@ -257,7 +257,7 @@ body.nav-hidden .nav {
   cursor: pointer;
 }
 .tb-select:focus { outline: 0; border-color: var(--purple); }
-.tb-clear {
+.tb-clear, .tb-go {
   border: 1.5px solid var(--border);
   border-radius: 8px;
   padding: 7px 13px;
@@ -267,9 +267,67 @@ body.nav-hidden .nav {
   font-weight: 600;
   color: var(--text-sub);
   cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
 }
 .tb-clear:hover { border-color: var(--red); color: var(--red); }
-.tb-count { font-size: 12.5px; font-weight: 700; color: var(--purple); margin-left: auto; }
+.tb-go { border-color: var(--purple); background: var(--purple); color: #fff; }
+.tb-go:hover { background: var(--purple2); }
+.tb-count { font-size: 12.5px; color: var(--text-sub); margin-left: auto; white-space: nowrap; }
+.tb-count b { color: var(--purple); }
+
+/* ── แถบเลขหน้า ── */
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--text-sub);
+}
+.pager-nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 0 auto; }
+.pager-info { font-weight: 700; color: var(--text-sub); white-space: nowrap; }
+
+.page-btn {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 9px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  background: var(--white);
+  color: var(--text-sub);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .13s ease;
+}
+.page-btn:hover:not(.disabled):not(.current) {
+  border-color: var(--purple);
+  color: var(--purple);
+  background: var(--purple-soft);
+}
+.page-btn.current { background: var(--purple); border-color: var(--purple); color: #fff; }
+.page-btn.disabled { opacity: .4; cursor: not-allowed; }
+.page-gap { padding: 0 3px; color: var(--text-muted); }
+
+.pager-size { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.size-link {
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text-sub);
+  font-weight: 700;
+}
+.size-link:hover { background: var(--gray-soft); }
+.size-link.active { background: var(--purple-soft); color: var(--purple); }
 
 /* ── ตาราง ── */
 .list-wrap {
@@ -295,20 +353,23 @@ body.nav-hidden .nav {
   white-space: nowrap;
 }
 /* หัวคอลัมน์ที่กดเรียงได้ */
-.list-table thead th.sortable {
-  cursor: pointer;
-  user-select: none;
+.list-table thead th.sortable { padding: 0; }
+.list-table thead th.sortable a {
+  display: block;
+  padding: 11px 12px;
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
   transition: color .13s ease, background .13s ease;
 }
-.list-table thead th.sortable:hover { color: var(--purple); background: var(--purple-soft); }
-.list-table thead th.sorted { color: var(--purple); }
+.list-table thead th.sortable a:hover { color: var(--purple); background: var(--purple-soft); }
+.list-table thead th.sorted a { color: var(--purple); }
 
 .sort-arrow {
   display: inline-block;
   margin-left: 3px;
   font-size: 11px;
   color: var(--text-muted);
-  transition: color .13s ease;
 }
 th.sorted .sort-arrow { color: var(--purple); font-weight: 900; }
 

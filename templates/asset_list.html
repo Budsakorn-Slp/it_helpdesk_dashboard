@@ -12,6 +12,9 @@
   {% include '_icons.html' %}
 </head>
 
+{# list_url(...) มาจาก routes/pages.py — สร้าง URL โดยคงตัวกรองอื่นไว้
+   และรีเซ็ตกลับหน้า 1 เสมอ ยกเว้นตอนส่ง page มาเอง #}
+
 <body class="page-list">
 
   <!-- ── HEADER ── -->
@@ -28,7 +31,7 @@
         <div class="h-clock" id="clock">--:--:--</div>
         <div class="h-date" id="dateTxt"></div>
       </div>
-      <a href="/asset?view=board" class="h-back" title="สลับไปมุมมองบอร์ด">
+      <a href="/{{ board_key }}?view=board" class="h-back" title="สลับไปมุมมองบอร์ด">
         <svg width="12" height="12"><use href="#ic-board" /></svg>
         มุมมองบอร์ด
       </a>
@@ -54,7 +57,8 @@
           <span class="nav-caret-space"></span>
         {% endif %}
 
-        <button class="nav-label" onclick="filterByNav(this)" data-key="{{ node.key }}">
+        <a class="nav-label{{ ' active' if filters.cat == node.key }}"
+           href="{{ list_url(cat='' if filters.cat == node.key else node.key) }}">
           {% if node.icon %}
             <svg class="nav-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><use href="#{{ node.icon }}"/></svg>
           {% elif node.cls %}
@@ -62,7 +66,7 @@
           {% endif %}
           <span class="nav-text">{{ node.label }}</span>
           <span class="nav-count">{{ node.count }}</span>
-        </button>
+        </a>
       </div>
 
       {% if has_children %}
@@ -79,11 +83,12 @@
       <li class="nav-node lv0">
         <div class="nav-item">
           <span class="nav-caret-space"></span>
-          <button class="nav-label nav-all active" onclick="resetAll()" data-key="">
+          <a class="nav-label nav-all{{ ' active' if not filters.flow and not filters.cat and not filters.q and not filters.days }}"
+             href="{{ url_for('pages.board', board_key=board_key) }}">
             <svg class="nav-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-list"/></svg>
             <span class="nav-text">ทั้งหมด</span>
-            <span class="nav-count">{{ rows|length }}</span>
-          </button>
+            <span class="nav-count">{{ counts.total }}</span>
+          </a>
         </div>
       </li>
     </ul>
@@ -94,11 +99,12 @@
         <li class="nav-node lv0">
           <div class="nav-item">
             <span class="nav-caret-space"></span>
-            <button class="nav-label" onclick="filterByFlow(this)" data-flow="{{ s.key }}">
+            <a class="nav-label{{ ' active' if filters.flow == s.key }}"
+               href="{{ list_url(flow='' if filters.flow == s.key else s.key) }}">
               <span class="nav-dot dot-{{ s.cls }}"></span>
               <span class="nav-text">{{ s.label }}</span>
               <span class="nav-count">{{ s.count }}</span>
-            </button>
+            </a>
           </div>
         </li>
       {% endfor %}
@@ -122,35 +128,59 @@
     {% endif %}
 
     <!-- ── แถบค้นหา / ตัวกรอง ── -->
-    <div class="list-toolbar">
+    <form class="list-toolbar" method="get" action="{{ url_for('pages.board', board_key=board_key) }}">
+      {# คงตัวกรองอื่นไว้เวลา submit ฟอร์ม #}
+      <input type="hidden" name="flow" value="{{ filters.flow }}">
+      <input type="hidden" name="cat"  value="{{ filters.cat }}">
+      <input type="hidden" name="sort" value="{{ filters.sort }}">
+      <input type="hidden" name="dir"  value="{{ filters.dir }}">
+      <input type="hidden" name="size" value="{{ filters.size }}">
+
       <div class="tb-search">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-search"/></svg>
-        <input type="text" id="list-search" placeholder="ค้นหาเลขที่เอกสาร, ชื่อผู้ขอ, แผนก, เรื่อง...">
+        <input type="text" name="q" id="list-search" value="{{ filters.q }}"
+               placeholder="ค้นหาเลขที่เอกสาร, ชื่อผู้ขอ, แผนก, ครุภัณฑ์...">
       </div>
 
-      <select class="tb-select" id="list-days">
+      <select class="tb-select" name="days" id="list-days" onchange="this.form.submit()">
         <option value="">ทุกช่วงเวลา</option>
-        <option value="1">วันนี้</option>
-        <option value="7">7 วันล่าสุด</option>
-        <option value="30">30 วันล่าสุด</option>
-        <option value="90">90 วันล่าสุด</option>
+        <option value="1"  {{ 'selected' if filters.days == 1 }}>วันนี้</option>
+        <option value="7"  {{ 'selected' if filters.days == 7 }}>7 วันล่าสุด</option>
+        <option value="30" {{ 'selected' if filters.days == 30 }}>30 วันล่าสุด</option>
+        <option value="90" {{ 'selected' if filters.days == 90 }}>90 วันล่าสุด</option>
       </select>
 
-      <button class="tb-clear" onclick="clearListFilter()">✕ ล้างตัวกรอง</button>
-      <span class="tb-count" id="list-count"></span>
-    </div>
+      <button type="submit" class="tb-go">ค้นหา</button>
+      <a class="tb-clear" href="{{ url_for('pages.board', board_key=board_key) }}">✕ ล้างตัวกรอง</a>
+
+      <span class="tb-count">
+        {% if pager.total %}
+          แสดง {{ pager.first_row }}–{{ pager.last_row }} จาก <b>{{ pager.total }}</b> รายการ
+        {% else %}
+          ไม่พบรายการ
+        {% endif %}
+      </span>
+    </form>
 
     <!-- ── ตารางเอกสาร ── -->
     <div class="list-wrap">
       <table class="list-table">
         <thead>
           <tr>
-            <th class="c-id sortable" onclick="sortBy('id')" title="คลิกเพื่อเรียงตามเลขที่">
-              เลขที่ <span class="sort-arrow" id="sort-arrow-id">⇅</span>
-            </th>
-            <th class="c-date sortable" onclick="sortBy('date')" title="คลิกเพื่อเรียงตามวันที่แจ้ง">
-              วันที่ <span class="sort-arrow" id="sort-arrow-date">⇅</span>
-            </th>
+            {% macro sort_head(field, label, css) %}
+              {% set active = filters.sort == field %}
+              {% set next_dir = 'asc' if (active and filters.dir == 'desc') else 'desc' %}
+              <th class="{{ css }} sortable{{ ' sorted' if active }}">
+                <a href="{{ list_url(sort=field, dir=next_dir) }}"
+                   title="เรียงตาม{{ label }} {{ 'น้อยไปมาก' if next_dir == 'asc' else 'มากไปน้อย' }}">
+                  {{ label }}
+                  <span class="sort-arrow">{{ ('▲' if filters.dir == 'asc' else '▼') if active else '⇅' }}</span>
+                </a>
+              </th>
+            {% endmacro %}
+
+            {{ sort_head('id', 'เลขที่', 'c-id') }}
+            {{ sort_head('date', 'วันที่', 'c-date') }}
             <th>ผู้ขอ</th>
             <th class="c-type">ประเภท</th>
             <th>เรื่อง</th>
@@ -163,13 +193,9 @@
           {% for r in rows %}
             <tr class="list-row"
                 data-id="{{ r.id }}"
-                data-seq="{{ loop.index0 }}"
                 data-flow="{{ r.workflow_status }}"
                 data-nav="{{ r.doc_group }}:{{ r.doc_code }}"
-                data-group="{{ r.doc_group }}"
-                data-date="{{ r.date_full }}"
-                data-sort-date="{{ r.sort_date }}"
-                data-search="{{ (r.id ~ ' ' ~ r.requester ~ ' ' ~ r.dept ~ ' ' ~ r.title ~ ' ' ~ r.subtitle)|lower }}">
+                data-group="{{ r.doc_group }}">
 
               <td class="c-id"><span class="doc-id">{{ r.id }}</span></td>
               <td class="c-date">{{ r.date }}</td>
@@ -251,14 +277,57 @@
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="8" class="list-empty">ไม่พบเอกสาร</td></tr>
+            <tr><td colspan="8" class="list-empty">ไม่พบเอกสารที่ตรงกับเงื่อนไข</td></tr>
           {% endfor %}
-          <tr id="list-no-match" style="display:none">
-            <td colspan="8" class="list-empty">ไม่พบเอกสารที่ตรงกับเงื่อนไข</td>
-          </tr>
         </tbody>
       </table>
     </div>
+
+    <!-- ── แถบเลขหน้า ── -->
+    {% if pager.total %}
+      <div class="pager">
+        <div class="pager-size">
+          แสดงหน้าละ
+          {% for n in pager.sizes %}
+            <a class="size-link{{ ' active' if pager.size == n }}"
+               href="{{ list_url(size=n) }}">{{ n }}</a>
+          {% endfor %}
+          รายการ
+        </div>
+
+        {% if pager.total_pages > 1 %}
+          <div class="pager-nav">
+            {% if pager.has_prev %}
+              <a class="page-btn" href="{{ list_url(page=1) }}" title="หน้าแรก">«</a>
+              <a class="page-btn" href="{{ list_url(page=pager.page - 1) }}">‹ ก่อนหน้า</a>
+            {% else %}
+              <span class="page-btn disabled">«</span>
+              <span class="page-btn disabled">‹ ก่อนหน้า</span>
+            {% endif %}
+
+            {% for n in pager.pages %}
+              {% if n is none %}
+                <span class="page-gap">…</span>
+              {% elif n == pager.page %}
+                <span class="page-btn current">{{ n }}</span>
+              {% else %}
+                <a class="page-btn" href="{{ list_url(page=n) }}">{{ n }}</a>
+              {% endif %}
+            {% endfor %}
+
+            {% if pager.has_next %}
+              <a class="page-btn" href="{{ list_url(page=pager.page + 1) }}">ถัดไป ›</a>
+              <a class="page-btn" href="{{ list_url(page=pager.total_pages) }}" title="หน้าสุดท้าย">»</a>
+            {% else %}
+              <span class="page-btn disabled">ถัดไป ›</span>
+              <span class="page-btn disabled">»</span>
+            {% endif %}
+          </div>
+
+          <div class="pager-info">หน้า {{ pager.page }} จาก {{ pager.total_pages }}</div>
+        {% endif %}
+      </div>
+    {% endif %}
 
   </div><!-- /list-page -->
   </div><!-- /shell -->

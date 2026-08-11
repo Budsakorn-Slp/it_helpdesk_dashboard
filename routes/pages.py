@@ -3,7 +3,7 @@
 import logging
 from datetime import date
 
-from flask import Blueprint, abort, render_template, request, send_from_directory
+from flask import Blueprint, abort, render_template, request, send_from_directory, url_for
 
 import config
 from db import DatabaseError, oracle_msg
@@ -57,14 +57,50 @@ def board(board_key):
     )
 
 
+def _list_url_builder(board_key, filters):
+    """สร้างตัวช่วยทำ URL ให้ template — คงตัวกรองอื่นไว้เสมอ
+
+    ค่าที่เป็นค่าตั้งต้นจะไม่ใส่ลง URL เพื่อให้ลิงก์สั้นและอ่านง่าย
+    """
+    def build(**overrides):
+        args = {
+            "flow": filters["flow"],
+            "cat":  filters["cat"],
+            "q":    filters["q"],
+            "days": filters["days"],
+            "sort": filters["sort"],
+            "dir":  filters["dir"],
+            "size": filters["size"],
+            "page": 1,          # เปลี่ยนตัวกรองแล้วต้องกลับหน้า 1
+        }
+        args.update(overrides)
+
+        clean = {k: v for k, v in args.items() if v not in ("", None, 0)}
+        if not clean.get("sort"):
+            clean.pop("dir", None)          # ทิศทางไม่มีความหมายถ้าไม่ได้เรียง
+        if clean.get("size") == asset_list.DEFAULT_PAGE_SIZE:
+            clean.pop("size", None)
+        if clean.get("page") == 1:
+            clean.pop("page", None)
+        return url_for("pages.board", board_key=board_key, **clean)
+
+    return build
+
+
 def _render_list(board_key, cfg):
-    """หน้ารายการเอกสาร — ใช้แทนบอร์ด kanban สำหรับบอร์ดใน LIST_VIEW_BOARDS"""
+    """หน้ารายการเอกสาร — กรอง เรียง และแบ่งหน้าที่ฝั่งฐานข้อมูล
+
+    ตัวกรองทั้งหมดอยู่ใน query string จึงบุ๊กมาร์กและกดปุ่มย้อนกลับได้
+    """
+    filters = asset_list.parse_filters(request.args)
+
     error = None
     try:
-        rows, stats = asset_list.fetch_rows()
+        counts = asset_list.fetch_counts()
+        rows, total, filters["page"] = asset_list.fetch_page(filters)
     except (DatabaseError, RuntimeError) as exc:
         error = oracle_msg(exc)
-        rows, stats = asset_list.empty()
+        counts, rows, total = asset_list.empty_counts(), [], 0
         log.error("[list:%s] %s", board_key, error)
 
     return render_template(
@@ -72,9 +108,12 @@ def _render_list(board_key, cfg):
         board_key=board_key,
         cfg=cfg,
         rows=rows,
-        stats=stats,
-        status_nav=asset_list.build_status_nav(stats),
-        nav=asset_list.build_nav(rows),
+        filters=filters,
+        list_url=_list_url_builder(board_key, filters),
+        pager=asset_list.build_pager(filters["page"], filters["size"], total),
+        counts=counts,
+        status_nav=asset_list.build_status_nav(counts),
+        nav=asset_list.build_nav(counts),
         status_map=config.STATUS_MAP,
         transfer_type_labels=config.TRANSFER_TYPE_LABELS,
         error=error,
