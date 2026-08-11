@@ -8,10 +8,24 @@
 
 จากนั้นคำนวณ workflow_status เพื่อให้แต่ละแถวรู้ว่าควรมีปุ่มดำเนินการอะไร
 """
+import re
+
 import config
 import db
 import sql
 from services import boards, docs, tracking
+
+#: REQUEST_DATE เก็บเป็น VARCHAR2 'DD/MM/YYYY HH24:MI' — เรียงตรง ๆ ไม่ได้
+_DATE_RE = re.compile(r"(\d{2})/(\d{2})/(\d{4})(?:\s+(\d{2}):(\d{2}))?")
+
+
+def date_sort_key(text):
+    """'DD/MM/YYYY HH:MM' → 'YYYYMMDDHHMM' ที่เรียงด้วยการเทียบสตริงได้"""
+    m = _DATE_RE.match((text or "").strip())
+    if not m:
+        return ""
+    day, month, year, hour, minute = m.groups()
+    return f"{year}{month}{day}{hour or '00'}{minute or '00'}"
 
 #: workflow_status → ปุ่มที่แถวนั้นควรมี (ฝั่ง template ใช้ตัดสิน)
 ACTIONS = {
@@ -80,6 +94,7 @@ def fetch_rows():
 
         row = docs.map_row(d)
         row["request_status"]    = status
+        row["sort_date"]         = date_sort_key(d.get("request_date"))
         row["workflow_status"]   = workflow
         row["is_tracking"]       = is_tracking
         row["tracking_complete"] = signatures.get(rid, False)

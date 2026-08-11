@@ -16,9 +16,12 @@ const AUTO_REFRESH_MS = 300000;   /* รีเฟรชหน้าทุก 5 �
 const MS_PER_DAY      = 86400000;
 const NAV_STATE_KEY   = "assetNavOpen";     /* จำว่าหมวดไหนกางอยู่ */
 const NAV_HIDDEN_KEY  = "assetNavHidden";   /* จำว่าซ่อนแถบเมนูไว้ไหม */
+const SORT_KEY        = "assetSort";        /* จำการเรียงล่าสุด */
 
-let activeFlow = "";   /* การ์ดสถิติที่เลือก ("" = ทุกสถานะ) */
-let activeNav  = "";   /* หมวดในเมนูซ้าย ("" = ทั้งหมด) */
+let activeFlow = "";   /* สถานะที่เลือกในเมนู ("" = ทุกสถานะ) */
+let activeNav  = "";   /* หมวดเอกสารในเมนู ("" = ทั้งหมด) */
+let sortField  = "";   /* "" = ลำดับตั้งต้นจาก server, "id" | "date" */
+let sortDir    = "desc";
 
 /* ── แปลง "DD/MM/YYYY HH:MM" เป็น Date (คืน null ถ้ารูปแบบไม่ตรง) ── */
 function parseDocDate(text) {
@@ -106,6 +109,75 @@ function matchesNav(row) {
 }
 
 /* ══════════════════════════════════════
+   SORT — เลขที่ / วันที่แจ้ง
+══════════════════════════════════════ */
+
+/* ค่าที่ใช้เทียบของแต่ละแถว
+   id   : ตัวเลข
+   date : สตริง YYYYMMDDHHMM ที่ server เตรียมมาให้ (เทียบตรง ๆ ได้) */
+function sortValue(row, field) {
+  if (field === "id") return Number(row.dataset.id) || 0;
+  return row.dataset.sortDate || "";
+}
+
+function compareRows(a, b) {
+  if (!sortField) return Number(a.dataset.seq) - Number(b.dataset.seq);
+
+  const av = sortValue(a, sortField);
+  const bv = sortValue(b, sortField);
+  let diff = av < bv ? -1 : av > bv ? 1 : 0;
+
+  /* ค่าเท่ากัน (เช่นแจ้งเวลาเดียวกัน) ให้เรียงต่อด้วยเลขที่เพื่อไม่ให้สลับไปมา */
+  if (diff === 0 && sortField !== "id") {
+    diff = (Number(a.dataset.id) || 0) - (Number(b.dataset.id) || 0);
+  }
+  return sortDir === "asc" ? diff : -diff;
+}
+
+function applySort() {
+  const tbody = document.getElementById("list-body");
+  if (!tbody) return;
+
+  [...tbody.querySelectorAll(".list-row")]
+    .sort(compareRows)
+    .forEach(row => tbody.appendChild(row));
+
+  /* แถว "ไม่พบเอกสารที่ตรงกับเงื่อนไข" ต้องอยู่ท้ายสุดเสมอ */
+  const noMatch = document.getElementById("list-no-match");
+  if (noMatch) tbody.appendChild(noMatch);
+
+  markSortArrows();
+}
+
+function markSortArrows() {
+  const asc = sortDir === "asc";
+  document.querySelectorAll("th.sortable").forEach(th => th.classList.remove("sorted"));
+
+  [["id", "sort-arrow-id"], ["date", "sort-arrow-date"]].forEach(([field, arrowId]) => {
+    const arrow = document.getElementById(arrowId);
+    if (!arrow) return;
+    const active = sortField === field;
+    arrow.textContent = active ? (asc ? "▲" : "▼") : "⇅";
+    if (active) arrow.closest("th")?.classList.add("sorted");
+  });
+}
+
+/* คลิกหัวคอลัมน์ = สลับ มากไปน้อย ⇄ น้อยไปมาก
+   คอลัมน์ใหม่เริ่มที่ "มากไปน้อย" เพราะรายการใหม่สุดควรอยู่บน */
+function sortBy(field) {
+  if (sortField === field) {
+    sortDir = sortDir === "desc" ? "asc" : "desc";
+  } else {
+    sortField = field;
+    sortDir = "desc";
+  }
+  try {
+    localStorage.setItem(SORT_KEY, JSON.stringify({ field: sortField, dir: sortDir }));
+  } catch (e) { /* โหมดส่วนตัว */ }
+  applySort();
+}
+
+/* ══════════════════════════════════════
    FILTER
 ══════════════════════════════════════ */
 
@@ -174,11 +246,15 @@ function resetAll() {
 function clearListFilter() {
   activeFlow = "";
   activeNav  = "";
+  sortField  = "";
+  sortDir    = "desc";
   ["list-search", "list-days"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
+  try { localStorage.removeItem(SORT_KEY); } catch (e) { /* โหมดส่วนตัว */ }
   markNavActive();
+  applySort();
   applyListFilter();
 }
 
@@ -201,6 +277,18 @@ function clearListFilter() {
       document.body.classList.add("nav-hidden");
     }
   } catch (e) { /* โหมดส่วนตัว */ }
+})();
+
+/* คืนค่าการเรียงที่เลือกไว้ครั้งก่อน */
+(function initSort() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SORT_KEY) || "null");
+    if (saved && (saved.field === "id" || saved.field === "date")) {
+      sortField = saved.field;
+      sortDir = saved.dir === "asc" ? "asc" : "desc";
+    }
+  } catch (e) { /* โหมดส่วนตัว */ }
+  applySort();
 })();
 
 document.getElementById("list-search")?.addEventListener("input", applyListFilter);

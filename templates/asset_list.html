@@ -145,8 +145,12 @@
       <table class="list-table">
         <thead>
           <tr>
-            <th class="c-id">เลขที่</th>
-            <th class="c-date">วันที่</th>
+            <th class="c-id sortable" onclick="sortBy('id')" title="คลิกเพื่อเรียงตามเลขที่">
+              เลขที่ <span class="sort-arrow" id="sort-arrow-id">⇅</span>
+            </th>
+            <th class="c-date sortable" onclick="sortBy('date')" title="คลิกเพื่อเรียงตามวันที่แจ้ง">
+              วันที่ <span class="sort-arrow" id="sort-arrow-date">⇅</span>
+            </th>
             <th>ผู้ขอ</th>
             <th class="c-type">ประเภท</th>
             <th>เรื่อง</th>
@@ -159,10 +163,12 @@
           {% for r in rows %}
             <tr class="list-row"
                 data-id="{{ r.id }}"
+                data-seq="{{ loop.index0 }}"
                 data-flow="{{ r.workflow_status }}"
                 data-nav="{{ r.doc_group }}:{{ r.doc_code }}"
                 data-group="{{ r.doc_group }}"
                 data-date="{{ r.date_full }}"
+                data-sort-date="{{ r.sort_date }}"
                 data-search="{{ (r.id ~ ' ' ~ r.requester ~ ' ' ~ r.dept ~ ' ' ~ r.title ~ ' ' ~ r.subtitle)|lower }}">
 
               <td class="c-id"><span class="doc-id">{{ r.id }}</span></td>
