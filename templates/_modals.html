@@ -237,7 +237,7 @@
                 style="display:none;background:var(--green)"
                 onclick="openCloseTrackFromDetail(currentDetailReqId)">
           <svg width="14" height="14" fill="none" stroke="#fff" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-          ปิดงาน
+          <span id="btn-close-tracking-label">ปิดงาน</span>
         </button>
       </div>
       {% endif %}
@@ -267,9 +267,23 @@
     <select id="close-track-it" class="emp-select">
       <option value="">เลือก IT</option>
     </select>
+
+    <!-- โผล่เฉพาะตอนลายเซ็นในระบบยังไม่ครบ — ผู้เซ็นลงนามบนกระดาษแล้ว
+         แต่ไม่ได้กดยืนยันในไลน์ จึงต้องแนบรูปเอกสารมาเป็นหลักฐานแทน -->
+    <div id="close-track-force" style="display:none">
+      <div class="close-track-warn">
+        ⏳ ลายเซ็นในระบบยังไม่ครบ — ปิดงานได้ต่อเมื่อแนบรูปเอกสารที่มีลายเซ็นจริง
+      </div>
+      <label for="close-track-file">แนบเอกสารที่มีลายเซ็น <span class="req-star">*</span></label>
+      <input type="file" id="close-track-file" class="file-input"
+             accept="image/*,application/pdf" onchange="previewCloseTrackFile()">
+      <div id="close-track-file-name" class="file-picked"></div>
+    </div>
+
     <div class="modal-btns">
       <button class="modal-cancel-btn" onclick="closeTrackModal()">ยกเลิก</button>
-      <button class="btn-save"         onclick="submitCloseTracking()">✔ ปิดงาน</button>
+      <button class="btn-save" id="close-track-submit"
+              onclick="submitCloseTracking()">✔ ปิดงาน</button>
     </div>
   </div>
 </div>

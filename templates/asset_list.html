@@ -298,13 +298,15 @@
 
                   {% if 'close_tracking' in r.actions %}
                     {% if r.tracking_complete %}
-                      <button class="act-btn act-close" onclick="openCloseTrackModal('{{ r.id }}')">
+                      <button class="act-btn act-close" onclick="openCloseTrackModal('{{ r.id }}', true)">
                         <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5"><use href="#ic-check"/></svg>
                         ปิดงาน
                       </button>
                     {% else %}
-                      {# สถานะฝั่งซ้ายบอกอยู่แล้วว่ารอลายเซ็นครบ ตรงนี้จึงเหลือแค่ไอคอน #}
-                      <span class="act-btn act-wait" title="ลายเซ็นบนเอกสารยังไม่ครบ — ยังปิดงานไม่ได้">⏳</span>
+                      {# ลายเซ็นในระบบไม่ครบ (เซ็นกระดาษแล้วแต่ไม่ได้กดในไลน์)
+                         ยังปิดงานเองได้ แต่ modal จะบังคับให้แนบเอกสารที่เซ็นจริง #}
+                      <button class="act-btn act-wait" onclick="openCloseTrackModal('{{ r.id }}', false)"
+                              title="ลายเซ็นในระบบยังไม่ครบ — ปิดงานได้โดยแนบรูปเอกสารที่มีลายเซ็น">⏳</button>
                     {% endif %}
                   {% endif %}
 

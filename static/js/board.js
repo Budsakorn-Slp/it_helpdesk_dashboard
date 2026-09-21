@@ -147,6 +147,14 @@ function trackingCardHtml(item) {
           <span style="font-size:10px;background:#fff3cd;color:#856404;padding:2px 7px;border-radius:4px">${label}</span>
           <span style="font-size:10px;color:var(--yellow)">⏳ รอลายเซ็นครบ</span>
         </div>
+        <div style="display:flex;gap:5px;margin-top:5px">
+          <button class="btn-close-job btn-close-forced" style="font-size:11px;padding:3px 10px;flex:1"
+                  title="ลายเซ็นในระบบยังไม่ครบ — ปิดงานได้โดยแนบรูปเอกสารที่มีลายเซ็น"
+                  onclick="openCloseTrackModal('${reqId}', false)">✔ ปิดงาน + แนบเอกสาร</button>
+          <button class="btn-detail-sm" onclick="openDetailModal('${reqId}')">
+            <svg width="10" height="10" stroke="currentColor" fill="none" stroke-width="2"><use href="#ic-detail"/></svg>
+          </button>
+        </div>
       </div>`;
   }
 
@@ -162,7 +170,7 @@ function trackingCardHtml(item) {
       </div>
       <div style="display:flex;gap:5px;margin-top:5px">
         <button class="btn-close-job" style="font-size:11px;padding:3px 10px;flex:1"
-                onclick="openCloseTrackModal('${reqId}')">✔ ปิดงาน</button>
+                onclick="openCloseTrackModal('${reqId}', true)">✔ ปิดงาน</button>
         <button class="btn-detail-sm" onclick="openDetailModal('${reqId}')">
           <svg width="10" height="10" stroke="currentColor" fill="none" stroke-width="2"><use href="#ic-detail"/></svg>
         </button>

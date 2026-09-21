@@ -30,3 +30,6 @@ bak/
 *_bak*.py
 *_bak*.html
 *.log
+
+# โฟลเดอร์ที่เผลอ clone ซ้อนเข้ามา — ห้ามเข้า git อีก
+it_helpdesk_dashboard_git/

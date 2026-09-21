@@ -545,6 +545,7 @@ th.sorted .sort-arrow { color: var(--purple); font-weight: 900; }
 .act-approve { border-color: var(--green);  color: var(--green); }
 .act-reject  { border-color: var(--red);    color: var(--red); }
 .act-wait    { border-color: var(--yellow-border); color: var(--yellow); padding: 4px 7px; }
+.act-wait:hover { background: #fff8e6; border-color: var(--yellow); }
 .act-status  { border-color: var(--purple); color: var(--purple); padding: 4px 6px; }
 .act-detail  { padding: 4px 6px; }
 .act-detail:hover { border-color: var(--purple); color: var(--purple); }

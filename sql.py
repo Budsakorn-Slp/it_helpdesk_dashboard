@@ -223,6 +223,14 @@ REQUEST_ATTACHMENTS = """
     ORDER BY UPLOADED_AT ASC NULLS LAST, ID ASC
 """
 
+#: เพิ่มไฟล์แนบ — Oracle 11g ไม่มี identity column จึงต้องดึงเลขจาก sequence เอง
+INSERT_ATTACHMENT = """
+    INSERT INTO IT_HELPDESK_ATTACHMENT
+        (ID, REQUEST_ID, FILE_NAME, ORIG_NAME, FILE_SIZE, UPLOADED_BY, UPLOADED_AT)
+    VALUES (SEQ_IT_HELPDESK_ATTACHMENT.NEXTVAL, :req_id, :file_name, :orig_name,
+            :file_size, :uploaded_by, SYSDATE)
+"""
+
 # ── คอมเมนต์ ─────────────────────────────────────────────────────────────────
 
 COMMENTS = """

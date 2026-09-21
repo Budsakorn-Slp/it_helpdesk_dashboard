@@ -37,6 +37,8 @@ let currentDetailReqId = "";   /* modal รายละเอียด */
 let approveReqId       = "";
 let cancelReqId        = "";
 let closeTrackReqId    = "";   /* modal ปิดงานเอกสาร */
+let closeTrackForced   = false; /* ปิดงานทั้งที่ลายเซ็นในระบบยังไม่ครบ → ต้องแนบไฟล์ */
+let currentDetailTrackComplete = true;  /* ลายเซ็นครบไหม ของใบที่เปิดดูรายละเอียดอยู่ */
 let currentStatusReqId = "";
 let currentStatusOld   = "";
 
@@ -376,11 +378,24 @@ async function confirmCancelIT() {
    MODAL: ปิดงานเอกสาร (tracking)
 ══════════════════════════════════════ */
 
-function openCloseTrackModal(reqId) {
+/* complete = ลายเซ็นในระบบครบแล้วหรือยัง
+   ถ้ายังไม่ครบยังปิดงานได้ แต่ต้องแนบรูปเอกสารที่เซ็นจริงมาเป็นหลักฐาน */
+function openCloseTrackModal(reqId, complete = true) {
   closeAllModals();
-  closeTrackReqId = reqId;
+  closeTrackReqId   = reqId;
+  closeTrackForced  = !complete;
+
   const label = document.getElementById("close-track-req-id");
   if (label) label.textContent = reqId;
+
+  const force = document.getElementById("close-track-force");
+  if (force) force.style.display = closeTrackForced ? "" : "none";
+
+  const file = document.getElementById("close-track-file");
+  if (file) file.value = "";
+  const picked = document.getElementById("close-track-file-name");
+  if (picked) picked.textContent = "";
+
   openModal("close-track-modal");
   fillEmpSelect("close-track-it");
 }
@@ -388,22 +403,62 @@ function openCloseTrackModal(reqId) {
 /* เปิดจากในหน้ารายละเอียด — ปิด modal รายละเอียดก่อน */
 function openCloseTrackFromDetail(reqId) {
   hideModal("modal-detail");
-  openCloseTrackModal(reqId);
+  openCloseTrackModal(reqId, currentDetailTrackComplete);
+}
+
+function previewCloseTrackFile() {
+  const file   = document.getElementById("close-track-file")?.files?.[0];
+  const picked = document.getElementById("close-track-file-name");
+  if (!picked) return;
+  picked.textContent = file ? `📎 ${file.name}` : "";
 }
 
 function closeTrackModal() {
   hideModal("close-track-modal");
-  closeTrackReqId = "";
+  closeTrackReqId  = "";
+  closeTrackForced = false;
 }
 
 async function submitCloseTracking() {
   const itName = document.getElementById("close-track-it").value;
   if (!itName) { toast("กรุณาเลือก IT", true); return; }
 
+  const file = document.getElementById("close-track-file")?.files?.[0] || null;
+  if (closeTrackForced && !file) {
+    toast("ลายเซ็นในระบบยังไม่ครบ — กรุณาแนบรูปเอกสารที่มีลายเซ็น", true);
+    return;
+  }
+
   const reqId = closeTrackReqId;
-  closeTrackModal();
-  await submitAction("/api/close_tracking", { request_id: reqId, it_name: itName },
-                     "ปิดงานสำเร็จ");
+  const btn   = document.getElementById("close-track-submit");
+  if (btn) btn.disabled = true;
+
+  /* ไม่มีไฟล์ → ส่ง JSON แบบเดิม, มีไฟล์ → ต้องเป็น multipart */
+  try {
+    if (!file) {
+      closeTrackModal();
+      await submitAction("/api/close_tracking", { request_id: reqId, it_name: itName },
+                         "ปิดงานสำเร็จ");
+      return;
+    }
+
+    const form = new FormData();
+    form.append("request_id", reqId);
+    form.append("it_name", itName);
+    form.append("signed_doc", file);
+
+    const res  = await fetch("/api/close_tracking", { method: "POST", body: form });
+    const data = await res.json();
+    if (!data.ok) { toast(data.msg || "error", true); return; }
+
+    closeTrackModal();
+    toast("ปิดงานสำเร็จ");
+    reloadSoon();
+  } catch (e) {
+    toast("Connection error", true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 /* ══════════════════════════════════════
@@ -524,8 +579,19 @@ function applyDetailActions(overlay, d) {
   if (isReadOnly()) return;   /* ดูอย่างเดียว — เห็นชื่อผู้รับผิดชอบ แต่ไม่มีปุ่ม */
 
   if (d.is_tracking) {
-    /* เอกสารติดตาม: เปลี่ยนสถานะ/ผู้ทำเองไม่ได้ ต้องรอลายเซ็นครบแล้วกดปิดงาน */
-    if (btnClose) btnClose.style.display = d.transfer_complete ? "" : "none";
+    /* เอกสารติดตาม: เปลี่ยนสถานะ/ผู้ทำเองไม่ได้ ปิดงานได้อย่างเดียว
+       ลายเซ็นยังไม่ครบก็ปิดได้ แต่ modal จะบังคับให้แนบเอกสารที่เซ็นจริง */
+    currentDetailTrackComplete = !!d.transfer_complete;
+    if (btnClose && d.request_status !== STATUS_DONE) {
+      btnClose.style.display = "";
+      const closeLabel = overlay.querySelector("#btn-close-tracking-label");
+      if (closeLabel) {
+        closeLabel.textContent = d.transfer_complete ? "ปิดงาน" : "ปิดงาน (แนบเอกสาร)";
+      }
+      btnClose.title = d.transfer_complete
+        ? "ลายเซ็นครบแล้ว — ปิดงานได้เลย"
+        : "ลายเซ็นในระบบยังไม่ครบ — ปิดงานได้โดยแนบรูปเอกสารที่มีลายเซ็น";
+    }
     if (bar && d.request_status === STATUS_DONE) bar.style.display = "none";
     return;
   }
