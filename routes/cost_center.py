@@ -11,8 +11,14 @@ bp = Blueprint("cost_center", __name__)
 
 VALID_STATUS = ("Active", "Block")
 LOG_LIMIT = 20
-#: source=bulk (นำเข้าไฟล์) อนุญาตให้ทับของเดิม, single (กรอกทีละรายการ) ห้ามซ้ำ
+#: source=bulk (นำเข้าไฟล์) ทับของเดิมได้เลย, single (กรอกทีละรายการ) ต้องส่ง
+#  overwrite=True มายืนยันอีกครั้ง — กัน Cost Center ที่พิมพ์ผิดไปทับแผนกอื่น
 BULK_SOURCE = "bulk"
+
+
+def _text_row(d):
+    """แถวจาก DB → dict ของ str ที่ตัดช่องว่างแล้ว (None → "")"""
+    return {k: ("" if v is None else str(v).strip()) for k, v in d.items()}
 
 
 @bp.get("/cost-center")
@@ -26,10 +32,7 @@ def api_list():
     with db.db_conn() as conn:
         cur = conn.cursor()
         cur.execute(sql.COST_CENTERS)
-        items = [
-            {k: ("" if v is None else str(v).strip()) for k, v in d.items()}
-            for d in db.rows_to_dicts(cur)
-        ]
+        items = [_text_row(d) for d in db.rows_to_dicts(cur)]
     return ok_resp(items=items)
 
 
@@ -50,6 +53,7 @@ def api_save():
     operator   = field("operator")
     source     = field("source", "single")
     status     = field("status", "Active").capitalize()
+    overwrite  = source == BULK_SOURCE or bool(data.get("overwrite"))
 
     if not (company and costcenter and costdep and dept):
         return err_resp("กรุณากรอกข้อมูลที่จำเป็นให้ครบ")
@@ -68,11 +72,17 @@ def api_save():
 
     with db.db_conn() as conn:
         cur = conn.cursor()
-        cur.execute(sql.COST_CENTER_EXISTS, {"costcenter": costcenter})
-        exists = db.scalar(cur, 0) > 0
+        cur.execute(sql.COST_CENTER_ONE, {"costcenter": costcenter})
+        current = db.row_to_dict(cur)
+        exists = current is not None
 
-        if exists and source != BULK_SOURCE:
-            return err_resp(f'Cost Center "{costcenter}" ซ้ำกับข้อมูลที่มีอยู่แล้ว')
+        # ยังไม่ยืนยัน → ส่งค่าเดิมกลับไปให้หน้าเว็บถามก่อนว่าจะทับหรือไม่
+        if exists and not overwrite:
+            return err_resp(
+                f'Cost Center "{costcenter}" มีอยู่ในระบบแล้ว — ยืนยันเพื่ออัปเดตทับข้อมูลเดิม',
+                duplicate=True,
+                current=_text_row(current),
+            )
 
         actor_name = employees.resolve_name(cur, operator)
 
@@ -99,8 +109,5 @@ def api_logs():
     with db.db_conn() as conn:
         cur = conn.cursor()
         cur.execute(sql.LOGS_BY_TYPE, {"action_type": audit.COST_CENTER, "max_rows": LOG_LIMIT})
-        items = [
-            {k: ("" if v is None else str(v).strip()) for k, v in d.items()}
-            for d in db.rows_to_dicts(cur)
-        ]
+        items = [_text_row(d) for d in db.rows_to_dicts(cur)]
     return ok_resp(items=items)

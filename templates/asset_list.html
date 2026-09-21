@@ -57,7 +57,7 @@
           <span class="nav-caret-space"></span>
         {% endif %}
 
-        <a class="nav-label{{ ' active' if filters.cat == node.key }}"
+        <a class="nav-label{{ ' active' if filters.cat == node.key }}" title="{{ node.label }}"
            href="{{ list_url(cat='' if filters.cat == node.key else node.key) }}">
           {% if node.icon %}
             <svg class="nav-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><use href="#{{ node.icon }}"/></svg>
@@ -83,11 +83,26 @@
       <li class="nav-node lv0">
         <div class="nav-item">
           <span class="nav-caret-space"></span>
-          <a class="nav-label nav-all{{ ' active' if not filters.flow and not filters.cat and not filters.q and not filters.days }}"
-             href="{{ url_for('pages.board', board_key=board_key) }}">
+          <a class="nav-label nav-all{{ ' active' if not filters.flow and not filters.cat and not filters.fwd and not filters.q and not filters.days }}"
+             href="{{ reset_url }}">
             <svg class="nav-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-list"/></svg>
             <span class="nav-text">ทั้งหมด</span>
             <span class="nav-count">{{ counts.total }}</span>
+          </a>
+        </div>
+      </li>
+    </ul>
+
+    <ul class="nav-tree">
+      <li class="nav-node lv0">
+        <div class="nav-item">
+          <span class="nav-caret-space"></span>
+          <a class="nav-label{{ ' active' if filters.fwd }}"
+             title="เอกสารที่ถูกเปลี่ยนประเภทมาจากทีมอื่น"
+             href="{{ list_url(fwd=0 if filters.fwd else 1) }}">
+            <svg class="nav-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-forward"/></svg>
+            <span class="nav-text">เอกสารที่ส่งต่อ</span>
+            <span class="nav-count">{{ counts.forwarded }}</span>
           </a>
         </div>
       </li>
@@ -110,15 +125,18 @@
       {% endfor %}
     </ul>
 
-    <div class="nav-head">หมวดหมู่เอกสาร</div>
-    <ul class="nav-tree">
-      {% for node in nav %}{{ nav_node(node, 0) }}{% endfor %}
-    </ul>
+    {# บอร์ดที่ไม่มีใบโอนย้าย (เช่น /newreq) ไม่มีหมวดหมู่เอกสารให้แยก #}
+    {% if tracking and nav %}
+      <div class="nav-head">หมวดหมู่เอกสาร</div>
+      <ul class="nav-tree">
+        {% for node in nav %}{{ nav_node(node, 0) }}{% endfor %}
+      </ul>
 
-    <div class="nav-foot">
-      คำขอจะนับเป็น <b>ใบโอนย้าย</b> เมื่อมีเอกสารในระบบโอนย้ายเท่านั้น<br>
-      เบิก / ยืม ที่ไม่ได้ออกเอกสาร จะอยู่ในหมวดคำขอทั่วไป
-    </div>
+      <div class="nav-foot">
+        คำขอจะนับเป็น <b>ใบโอนย้าย</b> เมื่อมีเอกสารในระบบโอนย้ายเท่านั้น<br>
+        เบิก / ยืม ที่ไม่ได้ออกเอกสาร จะอยู่ในหมวดคำขอทั่วไป
+      </div>
+    {% endif %}
   </aside>
 
   <div class="list-page">
@@ -130,6 +148,7 @@
     <!-- ── แถบค้นหา / ตัวกรอง ── -->
     <form class="list-toolbar" method="get" action="{{ url_for('pages.board', board_key=board_key) }}">
       {# คงตัวกรองอื่นไว้เวลา submit ฟอร์ม #}
+      {% if keep_view %}<input type="hidden" name="view" value="list">{% endif %}
       <input type="hidden" name="flow" value="{{ filters.flow }}">
       <input type="hidden" name="cat"  value="{{ filters.cat }}">
       <input type="hidden" name="sort" value="{{ filters.sort }}">
@@ -151,7 +170,7 @@
       </select>
 
       <button type="submit" class="tb-go">ค้นหา</button>
-      <a class="tb-clear" href="{{ url_for('pages.board', board_key=board_key) }}">✕ ล้างตัวกรอง</a>
+      <a class="tb-clear" href="{{ reset_url }}">✕ ล้างตัวกรอง</a>
 
       <span class="tb-count">
         {% if pager.total %}
@@ -182,7 +201,8 @@
             {{ sort_head('id', 'เลขที่', 'c-id') }}
             {{ sort_head('date', 'วันที่', 'c-date') }}
             <th>ผู้ขอ</th>
-            <th class="c-type">ประเภท</th>
+            {# คอลัมน์ประเภทมีความหมายเฉพาะบอร์ดที่มีใบโอนย้าย #}
+            {% if tracking %}<th class="c-type">ประเภท</th>{% endif %}
             <th>เรื่อง</th>
             <th class="c-status">สถานะ</th>
             <th class="c-owner">ผู้รับผิดชอบ</th>
@@ -205,26 +225,45 @@
                 <div class="cell-sub">{{ r.dept }}</div>
               </td>
 
-              <td class="c-type">
-                <span class="type-tag type-{{ r.type_cls }}">{{ r.type_label }}</span>
-                {% if r.doc_group == 'transfer' %}<span class="doc-mark" title="มีใบโอนย้ายในระบบ">◆ ใบโอนย้าย</span>{% endif %}
-              </td>
+              {% if tracking %}
+                <td class="c-type">
+                  <span class="type-tag type-{{ r.type_cls }}">{{ r.type_label }}</span>
+                  {% if r.doc_group == 'transfer' %}<span class="doc-mark" title="มีใบโอนย้ายในระบบ">◆ ใบโอนย้าย</span>{% endif %}
+                </td>
+              {% endif %}
 
               <td>
                 <div class="cell-main" title="{{ r.remark }}">{{ r.title }}</div>
-                {% if r.subtitle %}<div class="cell-sub">{{ r.subtitle }}</div>{% endif %}
+                {% if r.is_forwarded %}
+                  <div class="fwd-note"
+                       title="ส่งต่อมาจาก {{ r.forward_from or '—' }} โดย {{ r.forward_by or '—' }} เมื่อ {{ r.forward_at or '—' }}">
+                    ⇄ ส่งต่อจาก {{ r.forward_from or '—' }}
+                    {%- if r.forward_by %} · {{ r.forward_by }}{% endif %}
+                    {%- if r.forward_at %} · {{ r.forward_at }}{% endif %}
+                  </div>
+                {% elif r.subtitle %}
+                  <div class="cell-sub">{{ r.subtitle }}</div>
+                {% endif %}
               </td>
 
               <td class="c-status">
                 <span class="flow-pill flow-{{ r.flow_cls }}">{{ r.flow_label }}</span>
-                {% if r.workflow_status == 'tracking' and not r.tracking_complete %}
-                  <div class="flow-note">⏳ รอลายเซ็นครบ</div>
+                {% if r.workflow_status == 'tracking' %}
+                  {% if r.tracking_complete %}
+                    <div class="flow-ready-note" title="ลายเซ็นครบเมื่อ {{ r.completed_at or '—' }} — พร้อมปิดงาน">
+                      ✔ พร้อมปิดงาน{% if r.completed_at %} · {{ r.completed_at }}{% endif %}
+                    </div>
+                  {% else %}
+                    <div class="flow-note">⏳ รอลายเซ็นครบ</div>
+                  {% endif %}
                 {% endif %}
               </td>
 
               <td class="c-owner">
                 {% if r.owner %}
-                  <div class="owner"><span class="owner-av">{{ r.owner_initial }}</span>{{ r.owner }}</div>
+                  <div class="owner" title="{{ r.owner }}">
+                    <span class="owner-av">{{ r.owner_initial }}</span><span>{{ r.owner }}</span>
+                  </div>
                 {% else %}
                   <span class="muted">—</span>
                 {% endif %}
@@ -236,6 +275,12 @@
                     <button class="act-btn act-start" onclick="openStartModal('{{ r.id }}')">
                       <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-play"/></svg>
                       เริ่มทำ
+                    </button>
+                    {# ส่งต่อทีมอื่นได้เฉพาะตอน "พร้อมทำ" เพราะทีมใหม่ต้องรับไปทำต่อทันที #}
+                    <button class="act-btn act-forward" title="ส่งต่อไปอีกทีม (เปลี่ยนประเภทเอกสาร)"
+                            onclick="openChangeTypeModal('{{ r.id }}', '{{ r.type_label|e }}')">
+                      <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-forward"/></svg>
+                      ส่งต่อ
                     </button>
                   {% endif %}
 
@@ -258,7 +303,8 @@
                         ปิดงาน
                       </button>
                     {% else %}
-                      <button class="act-btn act-wait" disabled title="ลายเซ็นบนเอกสารยังไม่ครบ">⏳ รอลายเซ็น</button>
+                      {# สถานะฝั่งซ้ายบอกอยู่แล้วว่ารอลายเซ็นครบ ตรงนี้จึงเหลือแค่ไอคอน #}
+                      <span class="act-btn act-wait" title="ลายเซ็นบนเอกสารยังไม่ครบ — ยังปิดงานไม่ได้">⏳</span>
                     {% endif %}
                   {% endif %}
 
@@ -277,7 +323,7 @@
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="8" class="list-empty">ไม่พบเอกสารที่ตรงกับเงื่อนไข</td></tr>
+            <tr><td colspan="{{ 8 if tracking else 7 }}" class="list-empty">ไม่พบเอกสารที่ตรงกับเงื่อนไข</td></tr>
           {% endfor %}
         </tbody>
       </table>

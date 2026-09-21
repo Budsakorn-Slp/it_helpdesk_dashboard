@@ -165,18 +165,97 @@ async function fillEmpSelect(selectId, placeholder = "เลือก IT", selec
   names.forEach(name => select.appendChild(new Option(name, name, false, name === selected)));
 }
 
-/* รายชื่อ IT พร้อมรหัสพนักงาน — ใช้เป็นผู้ดำเนินการตอนเปลี่ยนสถานะ */
-async function loadItEmployees() {
-  const select = document.getElementById("status-it-user");
+/* เติม <select> ด้วยรายชื่อ IT ที่ "value = รหัสพนักงาน"
+
+   ต่างจาก fillEmpSelect() ที่ value เป็นชื่อ — ใช้ตัวนี้กับทุก endpoint
+   ที่ส่ง action_by ไปให้ server แปลงเป็นชื่อเต็มเอง (change_status, change_type)
+   ถ้าใช้ผิดตัว server จะหาไม่เจอแล้วเก็บชื่อย่อลงฐานข้อมูลแทนชื่อเต็ม */
+async function fillItEmpSelect(selectId, placeholder = "เลือก IT") {
+  const select = document.getElementById(selectId);
   if (!select) return;
   try {
     const data = await getJson("/api/it_employees");
     select.innerHTML = "";
-    select.appendChild(new Option("เลือก IT", ""));
+    select.appendChild(new Option(placeholder, ""));
     (data.items || []).forEach(it => select.appendChild(new Option(it.first_name, it.emp_id)));
   } catch (e) {
     console.error(e);
   }
+}
+
+/* รายชื่อ IT สำหรับ modal เปลี่ยนสถานะ */
+function loadItEmployees() {
+  return fillItEmpSelect("status-it-user");
+}
+
+/* ══════════════════════════════════════
+   MODAL: ส่งต่อไปอีกทีม (เปลี่ยนประเภทเอกสาร)
+══════════════════════════════════════ */
+
+let changeTypeReqId = "";
+let docTypes        = null;   /* cache รายการประเภทเอกสาร */
+
+async function fetchDocTypes() {
+  if (docTypes) return docTypes;
+  try {
+    const data = await getJson("/api/doc_types");
+    docTypes = data.ok ? (data.items || []) : [];
+  } catch (e) {
+    docTypes = [];
+  }
+  return docTypes;
+}
+
+async function openChangeTypeModal(reqId, currentLabel) {
+  closeAllModals();
+  changeTypeReqId = reqId;
+
+  document.getElementById("change-type-req-id").textContent = reqId;
+  document.getElementById("change-type-current").textContent = currentLabel || "—";
+  const note = document.getElementById("change-type-note");
+  if (note) note.value = "";
+
+  openModal("modal-change-type");
+
+  const select = document.getElementById("change-type-select");
+  select.innerHTML = "";
+  select.appendChild(new Option("กำลังโหลด...", ""));
+
+  /* ต้องใช้ fillItEmpSelect เพราะ /api/change_type รับ action_by เป็นรหัสพนักงาน */
+  const [types] = await Promise.all([
+    fetchDocTypes(),
+    fillItEmpSelect("change-type-by", "-- เลือกผู้ดำเนินการ --"),
+  ]);
+
+  select.innerHTML = "";
+  select.appendChild(new Option("-- เลือกประเภทใหม่ --", ""));
+  types.forEach(t => select.appendChild(new Option(t.name, t.id)));
+}
+
+function closeChangeTypeModal() {
+  hideModal("modal-change-type");
+  changeTypeReqId = "";
+}
+
+async function confirmChangeType() {
+  const newType = document.getElementById("change-type-select").value;
+  const actionBy = document.getElementById("change-type-by").value;
+  const note = (document.getElementById("change-type-note")?.value || "").trim();
+
+  if (!newType)  { toast("กรุณาเลือกประเภทที่จะส่งต่อไป", true); return; }
+  if (!actionBy) { toast("กรุณาเลือกผู้ดำเนินการ", true); return; }
+
+  const label = document.getElementById("change-type-select").selectedOptions[0]?.text || "";
+  if (!confirm(`ยืนยันส่งต่อเอกสาร #${changeTypeReqId} ไปยัง "${label}" ?\nเอกสารจะย้ายไปอยู่บอร์ดของทีมนั้นทันที`)) return;
+
+  const reqId = changeTypeReqId;
+  closeChangeTypeModal();
+  await submitAction("/api/change_type", {
+    request_id:  reqId,
+    new_type:    newType,
+    action_by:   actionBy,
+    action_note: note,
+  }, `ส่งต่อ #${reqId} ไป ${label} แล้ว`);
 }
 
 /* ══════════════════════════════════════
@@ -422,42 +501,71 @@ function detailStatusBadge(d) {
   return [STATUS_LABEL[status] || "-", "status-" + status];
 }
 
-/* แถบผู้รับผิดชอบ + ปุ่มบนหัว modal ให้ตรงกับสถานะของงาน */
-function applyDetailActions(overlay, d) {
-  const bar       = overlay.querySelector(".dm-assignee-bar");
-  const btnStatus = overlay.querySelector("#btn-change-status");
-  const btnWorker = overlay.querySelector("#btn-change-worker");
-  const btnClose  = overlay.querySelector("#btn-close-tracking");
-  const status    = d.request_status;
+/* หน้าไหนตั้ง DETAIL_READONLY = true จะดูได้อย่างเดียว ไม่มีปุ่มดำเนินการ */
+function isReadOnly() {
+  return typeof DETAIL_READONLY !== "undefined" && DETAIL_READONLY;
+}
 
-  [bar, btnStatus, btnWorker].forEach(el => { if (el) el.style.display = ""; });
-  if (btnClose) btnClose.style.display = "none";
+/* แถบผู้รับผิดชอบ + ปุ่มบนหัว modal ให้ตรงกับสถานะของงาน
+
+   d.workflow_status / d.can_forward มาจาก server (routes/request_api.py)
+   จึงใช้กติกาเดียวกับบอร์ดและหน้ารายการ ไม่ต้องคำนวณซ้ำฝั่ง browser */
+function applyDetailActions(overlay, d) {
+  const bar        = overlay.querySelector(".dm-assignee-bar");
+  const btnStatus  = overlay.querySelector("#btn-change-status");
+  const btnWorker  = overlay.querySelector("#btn-change-worker");
+  const btnForward = overlay.querySelector("#btn-forward");
+  const btnClose   = overlay.querySelector("#btn-close-tracking");
+
+  const buttons = [btnStatus, btnWorker, btnForward, btnClose];
+  buttons.forEach(el => { if (el) el.style.display = "none"; });
+  if (bar) bar.style.display = "";
+
+  if (isReadOnly()) return;   /* ดูอย่างเดียว — เห็นชื่อผู้รับผิดชอบ แต่ไม่มีปุ่ม */
 
   if (d.is_tracking) {
     /* เอกสารติดตาม: เปลี่ยนสถานะ/ผู้ทำเองไม่ได้ ต้องรอลายเซ็นครบแล้วกดปิดงาน */
-    if (btnStatus) btnStatus.style.display = "none";
-    if (btnWorker) btnWorker.style.display = "none";
-    if (btnClose)  btnClose.style.display  = d.transfer_complete ? "" : "none";
-    if (bar && status === STATUS_DONE) bar.style.display = "none";
+    if (btnClose) btnClose.style.display = d.transfer_complete ? "" : "none";
+    if (bar && d.request_status === STATUS_DONE) bar.style.display = "none";
     return;
   }
-  /* พร้อมทำ / รออนุมัติ: ยังไม่มีผู้รับผิดชอบ จึงซ่อนแถบทั้งแถบ */
-  if ((status === STATUS_READY || status === STATUS_APPROVE_WAIT) && bar) {
-    bar.style.display = "none";
-  }
+
+  if (btnStatus) btnStatus.style.display = "";
+  if (btnWorker) btnWorker.style.display = "";
+  /* ส่งต่อทีมได้เฉพาะงานที่พร้อมทำ */
+  if (btnForward && d.can_forward) btnForward.style.display = "";
 }
 
-function detailAttachHtml(fileName) {
-  const name = (fileName || "").trim();
-  if (!name) return '<span class="attach-none">ไม่มีไฟล์แนบ</span>';
+/* เปิด modal ส่งต่อจากหน้ารายละเอียด — ปิดหน้ารายละเอียดก่อน */
+function openChangeTypeFromDetail() {
+  const label = document.getElementById("d-detail-category")?.textContent || "";
+  closeDetailModal();
+  openChangeTypeModal(currentDetailReqId, label.trim());
+}
 
-  const url = FILE_BASE + encodeURIComponent(name);
-  return IMG_EXT.test(name)
-    ? `<a href="${url}" target="_blank" class="attach-img-wrap">
-         <img src="${url}" class="attach-img-preview">
-         <div class="attach-img-name">${escHtml(name)}</div>
-       </a>`
-    : `<a class="attach-link" href="${url}" target="_blank">${escHtml(name)}</a>`;
+/* ไฟล์แนบ 1 รายการ — server ส่งมาเป็น {name, label, size, by, at, is_image} */
+function attachItemHtml(file) {
+  const url  = FILE_BASE + encodeURIComponent(file.name);
+  const meta = [file.size, file.by, file.at].filter(Boolean).map(escHtml).join(" · ");
+
+  if (file.is_image) {
+    return `
+      <a href="${url}" target="_blank" class="attach-img-wrap" title="${escHtml(file.label)}">
+        <img src="${url}" class="attach-img-preview" alt="${escHtml(file.label)}" loading="lazy">
+        <div class="attach-img-name">${escHtml(file.label)}</div>
+        ${meta ? `<div class="attach-meta">${meta}</div>` : ""}
+      </a>`;
+  }
+  return `
+    <a class="attach-link" href="${url}" target="_blank" title="${escHtml(file.label)}">
+      <span class="attach-file-name">${escHtml(file.label)}</span>
+      ${meta ? `<span class="attach-meta">${meta}</span>` : ""}
+    </a>`;
+}
+
+function detailAttachHtml(files) {
+  if (!files || !files.length) return '<span class="attach-none">ไม่มีไฟล์แนบ</span>';
+  return `<div class="attach-list">${files.map(attachItemHtml).join("")}</div>`;
 }
 
 function detailSection(icon, title) {
@@ -481,9 +589,10 @@ function detailCell(label, value, fullWidth = false) {
 function renderDetailBody(d) {
   const fullname = `${d.requester_fname || ""} ${d.requester_lname || ""}`.trim() || "—";
 
-  const attachSection = (d.request_file || "").trim()
-    ? detailSection(detailIcon("ic-attach"), "ไฟล์แนบ") +
-      `<div class="dm-attach-box">${detailAttachHtml(d.request_file)}</div>`
+  const files = d.attachments || [];
+  const attachSection = files.length
+    ? detailSection(detailIcon("ic-attach"), `ไฟล์แนบ (${files.length})`) +
+      `<div class="dm-attach-box">${detailAttachHtml(files)}</div>`
     : "";
 
   const solutionSection = (d.request_solution || "").trim()
@@ -493,8 +602,8 @@ function renderDetailBody(d) {
        </div>`
     : "";
 
-  /* คอมเมนต์ได้เฉพาะงานที่กด "เริ่มทำ" แล้ว */
-  const commentSection = d.request_status === STATUS_DOING
+  /* คอมเมนต์ได้เฉพาะงานที่กด "เริ่มทำ" แล้ว และหน้านั้นไม่ใช่โหมดดูอย่างเดียว */
+  const commentSection = (d.request_status === STATUS_DOING && !isReadOnly())
     ? `<div class="add-comment-title">เพิ่มคอมเมนต์ใหม่</div>
        <textarea class="d-val-area editable" id="it-comment-text" rows="3" placeholder="พิมพ์คอมเมนต์..."></textarea>
        <div class="it-comment-by-row">
@@ -503,7 +612,9 @@ function renderDetailBody(d) {
        </div>
        <button class="btn-save-comment" id="btn-save-comment"
                onclick="saveComment('${escHtml(d.request_id)}')">เพิ่มคอมเมนต์</button>`
-    : '<div class="comment-locked">กดปุ่ม &quot;เริ่มทำ&quot; ก่อนจึงจะเพิ่มคอมเมนต์ได้</div>';
+    : (isReadOnly()
+        ? '<div class="comment-locked">หน้านี้ดูได้อย่างเดียว — เพิ่มคอมเมนต์ที่หน้าบอร์ด</div>'
+        : '<div class="comment-locked">กดปุ่ม &quot;เริ่มทำ&quot; ก่อนจึงจะเพิ่มคอมเมนต์ได้</div>');
 
   return (
     detailSection(detailIcon("ic-user"), "ข้อมูลผู้แจ้ง") +
@@ -516,7 +627,7 @@ function renderDetailBody(d) {
      </div>` +
     detailSection(detailIcon("ic-msg"), "รายละเอียดคำขอ") +
     `<div class="dm-info-grid">
-       ${detailCell("หมวดหมู่", `<span class="dm-category-badge">${escHtml(d.request_category || "—")}</span>`)}
+       ${detailCell("หมวดหมู่", `<span class="dm-category-badge" id="d-detail-category">${escHtml(d.request_category || "—")}</span>`)}
        ${detailCell("ประเภทปัญหา", escHtml(d.request_typeproblem || "—"))}
      </div>
      <div class="dm-remark-box">
@@ -718,6 +829,7 @@ document.addEventListener("click", e => {
 
 /* คลิกพื้นหลัง modal = ปิด */
 [["modal-detail", closeDetailModal],
+ ["modal-change-type", closeChangeTypeModal],
  ["modal-start", closeStartModal],
  ["modal-close", closeCloseModal],
  ["modal-cancel-it", closeCancelModal],

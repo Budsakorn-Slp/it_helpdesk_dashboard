@@ -102,7 +102,7 @@
             <div class="field">
               <label>Cost Center <span class="req">*</span> <span class="map">COST_COSTCENTER</span></label>
               <input type="text" id="f_costcenter" placeholder="เช่น 9G01000001" autocomplete="off">
-              <div class="hint">รหัสนี้ <b>ห้ามซ้ำ</b> — เป็น Unique Key ในฐานข้อมูล</div>
+              <div class="hint">ถ้ารหัสนี้ <b>มีอยู่แล้ว</b> ระบบจะให้ยืนยันก่อนอัปเดตทับข้อมูลเดิม</div>
             </div>
             <div class="field">
               <label>รหัสแผนก <span class="req">*</span> <span class="map">COST_COSTDEP</span></label>
@@ -125,6 +125,10 @@
               <input type="text" id="f_code" placeholder="(เว้นว่างได้)" autocomplete="off">
             </div>
           </div>
+
+          <!-- แผงยืนยันทับข้อมูลเดิม (ขึ้นเมื่อ Cost Center ซ้ำ) -->
+          <div id="dup-confirm"></div>
+
           <div class="form-actions">
             <button class="btn btn-ghost" onclick="clearForm()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
@@ -184,9 +188,14 @@
           <div class="tmpl-note">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
             <div>
-              <b>ลำดับคอลัมน์ใน Template:</b>
-              COMPANY · COST_DEPARTMENT (รหัส) · DEPARTMENT (ชื่อ) · COSTCENTER · COST_DESCRIPTION · COST_STATUS<br>
-              ระบบจะตรวจ Cost Center ซ้ำอัตโนมัติและข้ามแถวที่ซ้ำโดยไม่หยุดกระบวนการ
+              <b>หัวคอลัมน์ที่รองรับ:</b>
+              COMPANY · COST_DEPARTMENT (รหัสแผนก) · DEPARTMENT (ชื่อแผนก) · COSTCENTER · COST_DESCRIPTION · COST_STATUS<br>
+              รองรับชื่อแบบเก่าด้วย (COST_COMPANY / COST_COSTDEP / COST_COSTCENTER) ไม่สนตัวพิมพ์เล็กใหญ่ —
+              ระบบจะแสดงผลการจับคู่คอลัมน์ให้ตรวจก่อนอัปโหลดทุกครั้ง<br>
+              <b>Cost Center ที่ซ้ำจะถูกอัปเดตทับอัตโนมัติ</b> (ใช้อัปเดตสถานะ Active ⇄ Block ได้เลย)<br>
+              รหัสที่ขึ้นต้นด้วยตัวเลขแล้วตามด้วย E เช่น <b>1E00000100</b> Excel จะแปลงเป็นตัวเลขวิทยาศาสตร์ —
+              ให้จัดรูปแบบคอลัมน์เป็น <b>Text</b> ก่อนกรอก (หรือพิมพ์ ' นำหน้า)
+              Template ที่ดาวน์โหลดจากปุ่มด้านบนตั้งค่านี้ไว้ให้แล้ว
             </div>
           </div>
 

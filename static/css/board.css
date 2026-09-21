@@ -1076,6 +1076,75 @@
         padding: 6px 10px;
         background: var(--purple-soft);
       }
+
+      /* ปุ่มส่งต่อบนหัว modal รายละเอียด */
+      .dm-btn-forward {
+        border-color: #7c3aed;
+        color: #7c3aed;
+      }
+      .dm-btn-forward:hover { background: #f3e8ff; }
+
+      /* ── modal ส่งต่อไปอีกทีม ── */
+      .fwd-current {
+        font-size: 12.5px;
+        color: var(--text-sub);
+        background: var(--gray-soft);
+        border-radius: 8px;
+        padding: 8px 11px;
+        margin: 4px 0 10px;
+      }
+      .fwd-current strong { color: var(--text); }
+      .fwd-warn {
+        font-size: 11.5px;
+        line-height: 1.6;
+        color: #7c3aed;
+        background: #f3e8ff;
+        border-radius: 8px;
+        padding: 8px 11px;
+        margin-top: 10px;
+      }
+
+      /* ── รายการไฟล์แนบ (รองรับหลายไฟล์ต่อคำขอ) ── */
+      .attach-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .attach-list .attach-img-wrap {
+        width: 190px;
+        flex: 0 0 auto;
+      }
+      .attach-list .attach-img-preview {
+        height: 130px;
+        max-height: 130px;
+        object-fit: cover;
+      }
+      .attach-list .attach-link {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        max-width: 100%;
+      }
+      .attach-file-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 260px;
+      }
+      .attach-meta {
+        font-size: 10.5px;
+        font-weight: 500;
+        color: var(--text-muted);
+        padding: 0 10px 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .attach-list .attach-link .attach-meta { padding: 0; }
+      .attach-img-wrap:hover .attach-meta { color: var(--text-sub); }
+      .attach-link:hover .attach-meta { color: rgba(255, 255, 255, .85); }
+
       .comment-timeline {
         display: flex;
         flex-direction: column;

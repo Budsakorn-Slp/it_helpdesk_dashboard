@@ -174,6 +174,55 @@ REQUEST_DETAIL = """
 
 REQUEST_STATUS_OF = "SELECT REQUEST_STATUS FROM IT_HELPDESK_REQUEST WHERE REQUEST_ID = :req_id"
 
+# ── ประเภทเอกสาร / การส่งต่อทีม ─────────────────────────────────────────────
+#
+# IT_HELPDESK_TYPE.ID   ตรงกับ IT_HELPDESK_REQUEST.REQUEST_TYPEFORM
+# IT_HELPDESK_TYPE.NAME ตรงกับ IT_HELPDESK_REQUEST.REQUEST_CATEGORY
+# เปลี่ยนประเภท = เซ็ตสองค่านี้พร้อมกันเสมอ
+#
+# หมายเหตุ: คอลัมน์ชื่อ DESC เป็น reserved word ต้องครอบด้วย " " ถ้าจะเลือกมา
+IT_TYPES = """
+    SELECT ID, NAME, ICON, COLOR
+    FROM IT_HELPDESK_TYPE
+    WHERE NVL(STATUS, 'Y') = 'Y'
+    ORDER BY ID
+"""
+
+IT_TYPE_BY_ID = """
+    SELECT ID, NAME FROM IT_HELPDESK_TYPE WHERE ID = :type_id AND NVL(STATUS,'Y') = 'Y'
+"""
+
+REQUEST_TYPE_OF = """
+    SELECT TRIM(REQUEST_TYPEFORM) AS REQUEST_TYPEFORM,
+           REQUEST_CATEGORY,
+           TRIM(REQUEST_STATUS) AS REQUEST_STATUS
+    FROM IT_HELPDESK_REQUEST WHERE REQUEST_ID = :req_id
+"""
+
+#: ส่งต่อเอกสารไปอีกทีม — ย้ายทั้ง typeform และ category พร้อมบันทึกผู้แก้ล่าสุด
+#  ไม่แตะ REQUEST_STATUS เพราะเอกสารต้องคง "พร้อมทำ" ให้ทีมใหม่ทำต่อได้ทันที
+CHANGE_TYPE = """
+    UPDATE IT_HELPDESK_REQUEST
+    SET REQUEST_TYPEFORM = :new_typeform,
+        REQUEST_CATEGORY = :new_category,
+        UPDATED_BY       = :actor_name,
+        UPDATED_AT       = CURRENT_TIMESTAMP
+    WHERE REQUEST_ID = :req_id
+"""
+
+# ── ไฟล์แนบ ─────────────────────────────────────────────────────────────────
+#
+# มี 2 ที่เก็บ:
+#   IT_HELPDESK_REQUEST.REQUEST_FILE  ของเดิม แนบได้ไฟล์เดียวต่อคำขอ
+#   IT_HELPDESK_ATTACHMENT            ของใหม่ แนบได้หลายไฟล์ (ใบโอนย้ายใช้ตัวนี้)
+# FILE_NAME = ชื่อไฟล์จริงบนดิสก์, ORIG_NAME = ชื่อตอนผู้ใช้อัปโหลด
+REQUEST_ATTACHMENTS = """
+    SELECT ID, FILE_NAME, ORIG_NAME, FILE_SIZE, UPLOADED_BY, UPLOADED_AT
+    FROM IT_HELPDESK_ATTACHMENT
+    WHERE REQUEST_ID = :req_id
+    ORDER BY UPLOADED_AT ASC NULLS LAST, ID ASC
+"""
+
 # ── คอมเมนต์ ─────────────────────────────────────────────────────────────────
 
 COMMENTS = """
@@ -312,8 +361,11 @@ COST_CENTERS = """
     ORDER BY COST_COMPANY, COST_COSTCENTER
 """
 
-COST_CENTER_EXISTS = """
-    SELECT COUNT(*) FROM IT_HELPDESK_DEPARTMENT
+#: แถวเดิมของ Cost Center (ถ้ามี) — ใช้ทั้งเช็คซ้ำและแสดงค่าเดิมให้ผู้ใช้ยืนยันก่อนทับ
+COST_CENTER_ONE = """
+    SELECT COST_COMPANY, COST_COSTDEP, COST_DEPARTMENT,
+           COST_COSTCENTER, COST_DESCRIPTION, COST_STATUS, CODE
+    FROM IT_HELPDESK_DEPARTMENT
     WHERE UPPER(COST_COSTCENTER) = UPPER(:costcenter)
 """
 
@@ -399,6 +451,8 @@ ASSET_LIST_BASE = """
         r.REQUEST_ID, r.REQUEST_DATE,
         r.REQUESTER_FNAME, r.REQUESTER_LNAME, r.REQUESTER_DEPT,
         r.REQUEST_STATUS, r.REQUEST_TYPEPROBLEM,
+        TRIM(r.REQUEST_TYPEFORM) AS REQUEST_TYPEFORM,
+        r.REQUEST_CATEGORY,
         NVL(DBMS_LOB.SUBSTR(r.REQUEST_REMARK, 400, 1), '') AS REQUEST_REMARK,
         r.ASSET_CODE, r.ASSET_NAME,
         NVL(NULLIF(TRIM(r.CLOSED_BY), ''),
@@ -442,13 +496,32 @@ ASSET_LIST_BASE = """
                 CASE WHEN UPPER(TRIM(NVL(t.TRANSFER_STATUS, ''))) = 'WAITING_IT'
                        OR t.MANAGER_APPROVE_DATE IS NOT NULL THEN 1 ELSE 0 END
             ELSE 0
-        END AS TRACKING_COMPLETE
+        END AS TRACKING_COMPLETE,
+
+        -- เวลาที่ลายเซ็นบนเอกสารครบ = ลายเซ็นใบสุดท้ายที่แต่ละประเภทรอ
+        -- DISPOSE/SALE ที่ครบด้วยสถานะ WAITING_IT ไม่มีวันที่อนุมัติ
+        -- จึงใช้เวลาที่แถวถูกแก้ล่าสุดแทน
+        CASE UPPER(TRIM(t.TRANSFER_TYPE))
+            WHEN 'TRANSFER' THEN t.RECEIVER_APPROVED_AT
+            WHEN 'BORROW'   THEN t.RECEIVER_APPROVED_AT
+            WHEN 'REPAIR'   THEN t.RECEIVER_APPROVED_AT
+            WHEN 'DISPOSE'  THEN NVL(t.MANAGER_APPROVE_DATE, CAST(t.UPDATED_AT AS DATE))
+            WHEN 'SALE'     THEN NVL(t.MANAGER_APPROVE_DATE, CAST(t.UPDATED_AT AS DATE))
+            ELSE NULL
+        END AS COMPLETED_AT,
+
+        -- การส่งต่อทีม: ดูจาก audit log ครั้งล่าสุดที่มีการเปลี่ยนประเภทเอกสาร
+        CASE WHEN fw.REQUEST_ID IS NOT NULL THEN 1 ELSE 0 END AS IS_FORWARDED,
+        fw.ACTION_BY  AS FORWARD_BY,
+        fw.CREATED_AT AS FORWARD_AT,
+        fw.OLD_STATUS AS FORWARD_FROM_TYPE,
+        ft.NAME       AS FORWARD_FROM_NAME
 
     FROM IT_HELPDESK_REQUEST r
     LEFT JOIN (
         SELECT REQUEST_ID, TRANSFER_TYPE, TRANSFER_TYPE_NAME,
                STATUS AS TRANSFER_STATUS, SENDER_NAME,
-               RECEIVER_APPROVED_AT, MANAGER_APPROVE_DATE,
+               RECEIVER_APPROVED_AT, MANAGER_APPROVE_DATE, UPDATED_AT,
                ROW_NUMBER() OVER (PARTITION BY REQUEST_ID
                                   ORDER BY UPDATED_AT DESC NULLS LAST, ID DESC) AS rn
         FROM IT_HELPDESK_TRANSFER
@@ -459,15 +532,23 @@ ASSET_LIST_BASE = """
                                   ORDER BY DATE_CREATE DESC NULLS LAST) AS rn
         FROM IT_HELPDESK_APPROVER
     ) a ON r.REQUEST_ID = a.REQUEST_ID AND a.rn = 1
-    WHERE TRIM(r.REQUEST_TYPEFORM) = :typeform
+    LEFT JOIN (
+        SELECT REQUEST_ID, ACTION_BY, CREATED_AT, OLD_STATUS,
+               ROW_NUMBER() OVER (PARTITION BY REQUEST_ID ORDER BY LOG_ID DESC) AS rn
+        FROM IT_HELPDESK_LOG
+        WHERE ACTION_TYPE = 'CHANGE_TYPE'
+    ) fw ON r.REQUEST_ID = fw.REQUEST_ID AND fw.rn = 1
+    LEFT JOIN IT_HELPDESK_TYPE ft ON TO_CHAR(ft.ID) = TRIM(fw.OLD_STATUS)
+    -- :typeform = NULL หมายถึงเอาทุกบอร์ด (หน้า dashboard ใช้แบบนี้)
+    WHERE (:typeform IS NULL OR TRIM(r.REQUEST_TYPEFORM) = :typeform)
       AND NVL(r.REQUEST_TYPEPROBLEM, '-') NOT LIKE 'TEST%'
 """
 
 #: จำนวนเอกสารแยกตามสถานะและหมวด — ใช้ทำตัวเลขบนเมนูซ้าย (ไม่ขึ้นกับหน้าที่เปิดอยู่)
 ASSET_LIST_STATS = f"""
-    SELECT WORKFLOW_STATUS, DOC_GROUP, DOC_CODE, COUNT(*) AS CNT
+    SELECT WORKFLOW_STATUS, DOC_GROUP, DOC_CODE, IS_FORWARDED, COUNT(*) AS CNT
     FROM ({ASSET_LIST_BASE})
-    GROUP BY WORKFLOW_STATUS, DOC_GROUP, DOC_CODE
+    GROUP BY WORKFLOW_STATUS, DOC_GROUP, DOC_CODE, IS_FORWARDED
 """
 
 DOCS_ASSETS = """

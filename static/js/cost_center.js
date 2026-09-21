@@ -9,6 +9,10 @@ const logBody     = document.getElementById('logBody');
 const singleFields = ['f_company','f_costdep','f_department','f_costcenter','f_desc','f_status','f_code'];
 
 let parsedRows = [];
+//: ผลจับคู่ "ฟิลด์ในระบบ → ชื่อหัวคอลัมน์ในไฟล์" ของไฟล์ที่เลือกอยู่
+let parsedCols = {};
+//: ข้อมูลที่กรอกไว้ตอนเจอ Cost Center ซ้ำ — รอผู้ใช้กดยืนยันก่อนอัปเดตทับ
+let pendingSave = null;
 
 // ─────────────────────────────────────────────
 //  Operator
@@ -128,41 +132,181 @@ function clearForm(){
     if (e.tagName === 'SELECT') e.selectedIndex = 0; else e.value = '';
     e.classList.remove('err');
   });
+  hideDupConfirm();
 }
 
 function saveSingle() {
   const v = id => document.getElementById(id).value.trim();
-  const company=v('f_company'), costcenter=v('f_costcenter'), costdep=v('f_costdep'),
-        dept=v('f_department'), desc=v('f_desc'), status=v('f_status'), code=v('f_code');
+  const payload = {
+    company:    v('f_company'),
+    costcenter: v('f_costcenter'),
+    costdep:    v('f_costdep'),
+    dept:       v('f_department'),
+    desc:       v('f_desc'),
+    status:     v('f_status'),
+    code:       v('f_code'),
+  };
 
   singleFields.slice(0,4).forEach(id => document.getElementById(id).classList.remove('err'));
   const miss = [];
-  if (!company)    miss.push('f_company');
-  if (!costdep)    miss.push('f_costdep');
-  if (!dept)       miss.push('f_department');
-  if (!costcenter) miss.push('f_costcenter');
+  if (!payload.company)    miss.push('f_company');
+  if (!payload.costdep)    miss.push('f_costdep');
+  if (!payload.dept)       miss.push('f_department');
+  if (!payload.costcenter) miss.push('f_costcenter');
   if (miss.length) { miss.forEach(id=>document.getElementById(id).classList.add('err')); toast('กรุณากรอกข้อมูลที่จำเป็น (*) ให้ครบ','error'); return; }
 
+  hideDupConfirm();
+  submitSingle(payload, false);
+}
+
+/** ยิงข้อมูลไป server — overwrite=true คือผู้ใช้ยืนยันแล้วว่าจะทับของเดิม */
+function submitSingle(payload, overwrite) {
   const btn = document.getElementById('btn-save-single');
   const origHTML = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = SPIN_HTML + ' กำลังบันทึก...';
+  btn.innerHTML = SPIN_HTML + (overwrite ? ' กำลังอัปเดต...' : ' กำลังบันทึก...');
 
   fetch('/api/cost-center', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ company, costcenter, costdep, dept, desc, status, code, operator: opSel.value, source: 'single' })
+    body: JSON.stringify({ ...payload, operator: opSel.value, source: 'single', overwrite })
   })
   .then(r=>r.json())
   .then(res => {
     btn.disabled = false; btn.innerHTML = origHTML;
-    if (!res.ok) {
-      if (res.msg?.includes('ซ้ำ')) document.getElementById('f_costcenter').classList.add('err');
-      toast(res.msg || 'เกิดข้อผิดพลาด', 'error'); return;
-    }
+    // ซ้ำ = ยังไม่ถือว่าผิด แค่ต้องให้ยืนยันก่อนทับ
+    if (res.duplicate) { renderDupConfirm(payload, res.current || {}); return; }
+    if (!res.ok) { toast(res.msg || 'เกิดข้อผิดพลาด', 'error'); return; }
     clearForm(); loadLog();
-    toast(`บันทึก Cost Center "${costcenter}" เรียบร้อย`, 'ok');
+    toast(res.msg || `บันทึก Cost Center "${payload.costcenter}" เรียบร้อย`, 'ok');
   })
   .catch(() => { btn.disabled=false; btn.innerHTML=origHTML; toast('ไม่สามารถเชื่อมต่อ server ได้','error'); });
+}
+
+// ─────────────────────────────────────────────
+//  Overwrite confirm (Cost Center ซ้ำ)
+// ─────────────────────────────────────────────
+//: [ป้ายไทย, คอลัมน์ที่ server ส่งกลับ, คีย์ในฟอร์ม]
+const DUP_FIELDS = [
+  ['บริษัท',     'cost_company',     'company'],
+  ['รหัสแผนก',   'cost_costdep',     'costdep'],
+  ['ชื่อแผนก',   'cost_department',  'dept'],
+  ['รายละเอียด', 'cost_description', 'desc'],
+  ['สถานะ',      'cost_status',      'status'],
+  ['Code',       'code',             'code'],
+];
+
+function hideDupConfirm(){
+  pendingSave = null;
+  const box = document.getElementById('dup-confirm');
+  if (box) { box.innerHTML = ''; box.classList.remove('show'); }
+  const cc = document.getElementById('f_costcenter');
+  if (cc) cc.classList.remove('warn');
+}
+
+function confirmOverwrite(){
+  if (pendingSave) submitSingle(pendingSave, true);
+}
+
+function renderDupConfirm(payload, current){
+  pendingSave = payload;
+  document.getElementById('f_costcenter').classList.add('warn');
+
+  const cell = val => esc(val) || '<span class="nil">— ว่าง —</span>';
+  const rows = DUP_FIELDS.map(([label, dbKey, key]) => {
+    const oldVal = (current[dbKey] || '').trim();
+    // CODE ที่เว้นว่างจะคงค่าเดิม (SQL ใช้ NVL) ฟิลด์อื่นเว้นว่าง = ทับด้วยค่าว่างจริง
+    const keepOld = key === 'code' && !payload[key] && !!oldVal;
+    const newVal  = keepOld ? oldVal : payload[key];
+    return `<tr class="${newVal !== oldVal ? 'changed' : ''}">
+        <td class="lab">${esc(label)}</td>
+        <td>${cell(oldVal)}</td>
+        <td class="arw">→</td>
+        <td>${cell(newVal)}${keepOld ? '<span class="keep">คงค่าเดิม</span>' : ''}</td>
+      </tr>`;
+  }).join('');
+
+  const box = document.getElementById('dup-confirm');
+  box.innerHTML = `
+    <div class="dup-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+      <div>
+        <b>Cost Center <span class="mono">${esc(payload.costcenter)}</span> มีอยู่ในระบบแล้ว</b>
+        <p>ตรวจสอบค่าที่จะถูกเขียนทับด้านล่าง ถ้ากรอกรหัสผิดให้กดยกเลิกแล้วแก้ไขก่อน</p>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <div class="tbl-scroll">
+        <table class="dup-diff">
+          <thead><tr><th>ฟิลด์</th><th>ข้อมูลเดิม</th><th></th><th>ข้อมูลใหม่</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="dup-actions">
+      <button class="btn btn-ghost" onclick="hideDupConfirm()">ยกเลิก</button>
+      <button class="btn btn-warn" onclick="confirmOverwrite()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+        อัปเดตทับข้อมูลเดิม
+      </button>
+    </div>`;
+  box.classList.add('show');
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ─────────────────────────────────────────────
+//  Column mapping — รองรับหัวคอลัมน์ได้หลายแบบ
+// ─────────────────────────────────────────────
+//: ฟิลด์ในระบบ → ชื่อหัวคอลัมน์ที่ยอมรับ (เรียงตามลำดับที่อยากได้ก่อน)
+//  ระวัง COST_DEPARTMENT: ไฟล์ส่งออกจริงใช้เป็น "รหัสแผนก" แต่ Template ชุดเก่าใช้เป็น
+//  "ชื่อแผนก" — จึงจับ dept ก่อน ถ้าไฟล์มีคอลัมน์ DEPARTMENT แยกอยู่แล้ว
+//  COST_DEPARTMENT จะเหลือให้ costdep เอง ทำให้อ่านได้ถูกทั้งสองแบบ
+const COL_ALIASES = {
+  company:    ['COST_COMPANY','COMPANY','บริษัท'],
+  costcenter: ['COST_COSTCENTER','COSTCENTER','COST CENTER','COST_CENTER'],
+  dept:       ['DEPARTMENT','COST_DEPARTMENT','DEPT_NAME','ชื่อแผนก'],
+  costdep:    ['COST_COSTDEP','COSTDEP','COST_DEPARTMENT','DEPT_CODE','รหัสแผนก'],
+  desc:       ['COST_DESCRIPTION','DESCRIPTION','DESC','รายละเอียด'],
+  status:     ['COST_STATUS','STATUS','สถานะ'],
+  code:       ['CODE'],
+};
+const MAP_ORDER       = ['company','costcenter','dept','costdep','desc','status','code'];
+const REQUIRED_FIELDS = ['company','costcenter','dept','costdep'];
+const FIELD_LABELS    = {
+  company:'บริษัท', costcenter:'Cost Center', dept:'ชื่อแผนก',
+  costdep:'รหัสแผนก', desc:'รายละเอียด', status:'สถานะ', code:'Code',
+};
+
+/** หัวคอลัมน์ในไฟล์ → ฟิลด์ในระบบ (ไม่สนตัวพิมพ์เล็กใหญ่และช่องว่างหัวท้าย) */
+function mapColumns(headers){
+  const seen = new Map();                     // 'COSTCENTER' → หัวคอลัมน์จริงในไฟล์
+  (headers || []).forEach(h => {
+    const k = String(h == null ? '' : h).trim().toUpperCase();
+    if (k && !seen.has(k)) seen.set(k, h);
+  });
+
+  const taken = new Set(), map = {};
+  MAP_ORDER.forEach(field => {
+    const hit = COL_ALIASES[field].find(a => seen.has(a.toUpperCase()) && !taken.has(a.toUpperCase()));
+    if (hit) { taken.add(hit.toUpperCase()); map[field] = seen.get(hit.toUpperCase()); }
+    else     { map[field] = ''; }
+  });
+  return map;
+}
+
+/** ค่าในเซลล์ → ข้อความ — ตัด ' ที่ Excel ใช้บังคับ format ข้อความออกให้ด้วย */
+function cellText(row, header){
+  if (!header) return '';
+  const raw = row[header];
+  if (raw === undefined || raw === null) return '';
+  if (typeof raw === 'number') return String(raw);   // เช็ค e+ ตอนอัปโหลดอีกที
+  return String(raw).trim().replace(/^'+/, '').trim();
+}
+
+/** เก็บแถว + จับคู่คอลัมน์ แล้ววาด preview */
+function setRows(rows, headers){
+  parsedRows = rows;
+  parsedCols = mapColumns(headers && headers.length ? headers : Object.keys(rows[0] || {}));
+  renderPreview(rows);
 }
 
 // ─────────────────────────────────────────────
@@ -190,6 +334,7 @@ function processFile(file) {
   document.getElementById('bulk-preview').innerHTML = '';
   document.getElementById('bulk-progress').classList.remove('show');
   parsedRows = [];
+  parsedCols = {};
 
   const ext = file.name.split('.').pop().toLowerCase();
 
@@ -205,8 +350,7 @@ function processFile(file) {
         headers.forEach((h,i) => obj[h] = vals[i] || '');
         return obj;
       }).filter(r => Object.values(r).some(v => v));
-      parsedRows = rows;
-      renderPreview(rows);
+      setRows(rows, headers);
     };
     reader.readAsText(file, 'UTF-8');
   } else {
@@ -217,8 +361,7 @@ function processFile(file) {
         const wb = XLSX.read(e.target.result, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        parsedRows = data;
-        renderPreview(data);
+        setRows(data, Object.keys(data[0] || {}));
       } catch(err) {
         toast('อ่านไฟล์ไม่สำเร็จ: ' + err.message, 'error');
       }
@@ -233,7 +376,17 @@ function renderPreview(rows) {
     container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--ink-faint);font-size:13px">ไม่พบข้อมูลในไฟล์</div>';
     return;
   }
-  const COLS = ['COST_COMPANY','COST_DEPARTMENT','COST_COSTDEP','COST_DESCRIPTION','COST_COSTCENTER','COST_STATUS'];
+
+  // ป้ายบอกว่าระบบอ่านคอลัมน์ไหนเป็นฟิลด์อะไร — ให้ผู้ใช้ทักท้วงได้ก่อนอัปโหลด
+  const missing = REQUIRED_FIELDS.filter(f => !parsedCols[f]);
+  const chips = MAP_ORDER.map(f => {
+    const src = parsedCols[f];
+    if (src)  return `<span class="map-chip ok">${esc(FIELD_LABELS[f])}<i>←</i>${esc(src)}</span>`;
+    const req = REQUIRED_FIELDS.includes(f);
+    return `<span class="map-chip ${req ? 'bad' : 'skip'}">${esc(FIELD_LABELS[f])}<i>←</i>${req ? 'ไม่พบคอลัมน์' : 'ไม่มีในไฟล์'}</span>`;
+  }).join('');
+
+  const cols = MAP_ORDER.filter(f => parsedCols[f]);
   const previewRows = rows.slice(0, 50); // แสดงสูงสุด 50 แถวใน preview
 
   container.innerHTML = `
@@ -242,12 +395,17 @@ function renderPreview(rows) {
         <span>ตัวอย่างข้อมูล ${previewRows.length < rows.length ? `(แสดง ${previewRows.length} จาก ${rows.length})` : `(${rows.length} แถว)`}</span>
         <span class="preview-badge">พร้อมอัปโหลด ${rows.length} รายการ</span>
       </div>
+      <div class="col-map">
+        <b>ระบบจับคู่คอลัมน์ในไฟล์ได้ดังนี้</b>
+        <div class="map-chips">${chips}</div>
+        ${missing.length ? `<div class="map-warn">ไม่พบคอลัมน์ที่จำเป็น: <b>${missing.map(f=>esc(FIELD_LABELS[f])).join(', ')}</b> — แก้ชื่อหัวคอลัมน์ในไฟล์ให้ตรง หรือดาวน์โหลด Template ใหม่ก่อนอัปโหลด</div>` : ''}
+      </div>
       <div class="tbl-wrap">
         <div class="tbl-scroll">
           <table>
-            <thead><tr>${COLS.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+            <thead><tr>${cols.map(f=>`<th>${esc(FIELD_LABELS[f])}</th>`).join('')}</tr></thead>
             <tbody>
-              ${previewRows.map(r=>`<tr>${COLS.map(c=>`<td>${esc(String(r[c]||''))}</td>`).join('')}</tr>`).join('')}
+              ${previewRows.map(r=>`<tr>${cols.map(f=>`<td>${esc(cellText(r, parsedCols[f]))}</td>`).join('')}</tr>`).join('')}
             </tbody>
           </table>
         </div>
@@ -257,6 +415,7 @@ function renderPreview(rows) {
 
 function clearFile(){
   parsedRows = [];
+  parsedCols = {};
   document.getElementById('fileName').textContent = '';
   document.getElementById('bulk-preview').innerHTML = '';
   document.getElementById('bulk-progress').classList.remove('show');
@@ -270,6 +429,13 @@ function clearFile(){
 async function uploadFile() {
   if (!parsedRows.length) { toast('กรุณาเลือกไฟล์และตรวจสอบ Preview ก่อน','error'); return; }
   if (!opSel.value)       { toast('กรุณาเลือกผู้ดำเนินการก่อน','error'); return; }
+
+  // จับคู่คอลัมน์ไม่ครบ = ทุกแถวจะกลายเป็น "ข้อมูลไม่ครบ" — บอกสาเหตุจริงดีกว่าปล่อยให้วิ่งจนจบ
+  const noCol = REQUIRED_FIELDS.filter(f => !parsedCols[f]);
+  if (noCol.length) {
+    toast(`ไฟล์นี้ไม่มีคอลัมน์: ${noCol.map(f=>FIELD_LABELS[f]).join(', ')} — ตรวจชื่อหัวคอลัมน์ในไฟล์ก่อน`, 'error');
+    return;
+  }
 
   const btn = document.getElementById('btn-upload');
   btn.disabled = true;
@@ -302,19 +468,19 @@ async function uploadFile() {
     progPct.textContent = pct + '%';
     progLabel.textContent = `กำลังบันทึก... (${i+1}/${total})`;
 
-    const company    = String(row['COST_COMPANY']     || '').trim();
-    const dept       = String(row['COST_DEPARTMENT']  || '').trim();  // ชื่อแผนก
-    const costdep    = String(row['COST_COSTDEP']     || '').trim();  // รหัสแผนก
-    const desc       = String(row['COST_DESCRIPTION'] || '').trim();
-    const costcenter = String(row['COST_COSTCENTER']  || '').trim();
-    const status     = String(row['COST_STATUS']      || 'Active').trim();
+    const company    = cellText(row, parsedCols.company);
+    const dept       = cellText(row, parsedCols.dept);      // ชื่อแผนก
+    const costdep    = cellText(row, parsedCols.costdep);   // รหัสแผนก
+    const desc       = cellText(row, parsedCols.desc);
+    const costcenter = cellText(row, parsedCols.costcenter);
+    const status     = cellText(row, parsedCols.status) || 'Active';
 
     // ── ตรวจ required fields ──
     const missing = [];
-    if (!company)    missing.push('COST_COMPANY');
-    if (!dept)       missing.push('COST_DEPARTMENT');
-    if (!costdep)    missing.push('COST_COSTDEP');
-    if (!costcenter) missing.push('COST_COSTCENTER');
+    if (!company)    missing.push(FIELD_LABELS.company);
+    if (!dept)       missing.push(FIELD_LABELS.dept);
+    if (!costdep)    missing.push(FIELD_LABELS.costdep);
+    if (!costcenter) missing.push(FIELD_LABELS.costcenter);
 
     if (missing.length) {
       skipCount++;
@@ -323,6 +489,21 @@ async function uploadFile() {
         type:   'missing',
         typeLabel: 'ข้อมูลไม่ครบ',
         detail: `ฟิลด์ที่ขาด: ${missing.join(', ')}`,
+      });
+      continue;
+    }
+
+    // ── Excel แปลงรหัสแบบ 1E00000100 เป็นตัวเลขวิทยาศาสตร์ไปแล้ว ──
+    const sci = [[FIELD_LABELS.costcenter, costcenter], [FIELD_LABELS.costdep, costdep]]
+      .filter(([, v]) => /e\+/i.test(v));
+    if (sci.length) {
+      skipCount++;
+      errRows.push({
+        rowNo, company, costcenter, dept,
+        type:   'missing',
+        typeLabel: 'Excel แปลงค่า',
+        detail: `${sci.map(([l,v])=>`${l} อ่านได้เป็น "${v}"`).join(', ')} — ` +
+                "จัดรูปแบบคอลัมน์เป็น Text (หรือพิมพ์ ' นำหน้า) แล้วบันทึกไฟล์ใหม่",
       });
       continue;
     }
@@ -411,15 +592,28 @@ async function uploadFile() {
 // ─────────────────────────────────────────────
 function downloadTemplate() {
   const wb  = XLSX.utils.book_new();
-  const hdr = ['COST_COMPANY','COST_DEPARTMENT','COST_COSTDEP','COST_DESCRIPTION','COST_COSTCENTER','COST_STATUS'];
+  //: ใช้ชื่อหัวคอลัมน์ชุดเดียวกับไฟล์ส่งออกจริง (COST_DEPARTMENT = รหัส, DEPARTMENT = ชื่อ)
+  const hdr = ['COMPANY','COST_DEPARTMENT','DEPARTMENT','COSTCENTER','COST_DESCRIPTION','COST_STATUS'];
   const ex  = [
-    ['SBI',  'ตัวอย่างแผนก A', '9G01000000', 'SUPPORT',      '9G01000001', 'Active'],
-    ['SBDS', 'ตัวอย่างแผนก B', '9G00000000', '9G1-SBDS CDC', '9G00000001', 'Block'],
+    ['SBI',  '1E00000000', '1E  Purchasing',              '1E00000100', 'OEM',     'Active'],
+    ['SBDS', '9G01000000', '9G Sales & Operation (SBDS)', '9G01000001', 'SUPPORT', 'Block'],
   ];
   const ws = XLSX.utils.aoa_to_sheet([hdr, ...ex]);
 
-  // กำหนดความกว้างคอลัมน์
-  ws['!cols'] = [12,35,18,28,18,14].map(w => ({wch: w}));
+  // บังคับคอลัมน์รหัสให้เป็น Text ล่วงหน้า — ไม่งั้น Excel อ่าน 1E00000100
+  // เป็นตัวเลขวิทยาศาสตร์ ทำให้ต้องพิมพ์ ' นำหน้าเองทุกครั้ง
+  const TEXT_COLS = [1, 3];   // COST_DEPARTMENT, COSTCENTER
+  const LAST_ROW  = 200;      // เผื่อแถวว่างไว้ให้กรอกต่อ
+  TEXT_COLS.forEach(c => {
+    for (let r = 1; r <= LAST_ROW; r++) {
+      const ref  = XLSX.utils.encode_cell({ r, c });
+      const cell = ws[ref] || (ws[ref] = { v: '' });
+      cell.t = 's';
+      cell.z = '@';
+    }
+  });
+  ws['!ref']  = XLSX.utils.encode_range({ s:{r:0,c:0}, e:{r:LAST_ROW, c:hdr.length - 1} });
+  ws['!cols'] = [12,18,35,18,28,14].map(w => ({wch: w}));
 
   XLSX.utils.book_append_sheet(wb, ws, 'Cost Center Template');
   XLSX.writeFile(wb, 'CostCenter_Template.xlsx');

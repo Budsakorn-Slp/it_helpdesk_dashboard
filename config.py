@@ -13,35 +13,45 @@ load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def _env(key, default=""):
+    """อ่านค่าจาก environment — ถ้าตั้งไว้เป็นค่าว่างให้ถือว่าไม่ได้ตั้ง
+
+    จำเป็นเพราะ .env มักเขียน KEY= ทิ้งไว้เฉย ๆ ซึ่ง os.getenv จะคืน ""
+    ไม่ใช่ค่า default ที่ต้องการ
+    """
+    value = os.getenv(key)
+    return value.strip() if value and value.strip() else default
+
+
 def _env_bool(key, default=False):
-    return os.getenv(key, str(default)).strip().lower() in ("1", "true", "yes", "on")
+    return _env(key, str(default)).lower() in ("1", "true", "yes", "on")
 
 
 # ── Oracle ───────────────────────────────────────────────────────────────────
 # ไม่ใส่ค่า default ของ user/password ในโค้ด — ต้องมาจาก .env เท่านั้น (ดู .env.example)
-ORACLE_USER     = os.getenv("ORACLE_USER", "")
-ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD", "")
-ORACLE_DSN      = os.getenv("ORACLE_DSN", "")
+ORACLE_USER     = _env("ORACLE_USER")
+ORACLE_PASSWORD = _env("ORACLE_PASSWORD")
+ORACLE_DSN      = _env("ORACLE_DSN")
 
 # โฟลเดอร์ Oracle Instant Client (thick mode — จำเป็นสำหรับ Oracle 11g)
 #   dev  (Windows) : C:\instantclient_11_2
 #   prod (Linux)   : /opt/oracle/instantclient_21_21
-ORACLE_LIB_DIR = os.getenv("ORACLE_LIB_DIR", "")
+ORACLE_LIB_DIR = _env("ORACLE_LIB_DIR")
 
 # บังคับเลือก driver ได้ด้วย ORACLE_DRIVER=oracledb|cx_Oracle
 # ถ้าไม่ระบุ จะลอง oracledb ก่อนแล้วค่อย fallback ไป cx_Oracle
-ORACLE_DRIVER = os.getenv("ORACLE_DRIVER", "").strip()
+ORACLE_DRIVER = _env("ORACLE_DRIVER")
 
 # ── Flask ────────────────────────────────────────────────────────────────────
-HOST  = os.getenv("FLASK_HOST", "0.0.0.0")
-PORT  = int(os.getenv("FLASK_PORT", "5093"))
+HOST  = _env("FLASK_HOST", "0.0.0.0")
+PORT  = int(_env("FLASK_PORT", "5093"))
 DEBUG = _env_bool("FLASK_DEBUG", False)
 
 # โฟลเดอร์ไฟล์แนบ — ใช้ร่วมกับระบบ it_helpdesk ที่อยู่ระดับเดียวกัน
-UPLOAD_FOLDER = os.getenv(
+UPLOAD_FOLDER = os.path.abspath(_env(
     "UPLOAD_FOLDER",
-    os.path.abspath(os.path.join(BASE_DIR, "..", "it_helpdesk", "static", "uploads")),
-)
+    os.path.join(BASE_DIR, "..", "it_helpdesk", "static", "uploads"),
+))
 
 # ── สถานะคำขอ (IT_HELPDESK_REQUEST.REQUEST_STATUS) ───────────────────────────
 STATUS_MAP = {
@@ -85,6 +95,51 @@ ASSET_TYPEFORM = BOARDS["asset"]["typeform"]
 
 # บอร์ดที่ต้องดึงสถานะเอกสาร (IT_HELPDESK_TRANSFER) มาประกอบ
 TRACKING_BOARDS = ("asset",)
+
+# ── มุมมองของแต่ละบอร์ด ─────────────────────────────────────────────────────
+#
+#   default  = มุมมองที่เปิดขึ้นมาตอนแรก  "board" (kanban) หรือ "list" (ตาราง)
+#   tracking = บอร์ดนี้มีใบโอนย้ายให้ติดตามหรือไม่
+#              ถ้าไม่มี หน้ารายการจะซ่อนสถานะ "ติดตามเอกสาร" เมนูหมวดหมู่เอกสาร
+#              และคอลัมน์ประเภท (เพราะไม่มีข้อมูลประเภทให้แสดง)
+#
+# ทุกบอร์ดสลับมุมมองได้เสมอด้วย ?view=board หรือ ?view=list
+VIEW_BOARD = "board"
+VIEW_LIST  = "list"
+
+LIST_VIEWS = {
+    # ทีมที่ทำงานบนกระดานเป็นหลัก — เปิดมาเป็น kanban
+    "support": {"tracking": False, "default": VIEW_BOARD},
+    "network": {"tracking": False, "default": VIEW_BOARD},
+    "system":  {"tracking": False, "default": VIEW_BOARD},
+    # งานเอกสารที่มีจำนวนมาก — เปิดมาเป็นตาราง
+    "asset":   {"tracking": True,  "default": VIEW_LIST},   # บอร์ดเดียวที่มีใบโอนย้าย
+    "newreq":  {"tracking": False, "default": VIEW_LIST},
+}
+
+
+def list_view(board_key):
+    """ค่าตั้งมุมมองของบอร์ดนี้ (None ถ้าบอร์ดนี้ไม่มีหน้ารายการ)"""
+    return LIST_VIEWS.get(board_key)
+
+
+def resolve_view(board_key, requested):
+    """ตัดสินว่าจะแสดงมุมมองไหน — ค่าจาก URL มาก่อน ถ้าไม่ระบุใช้ค่าตั้งต้นของบอร์ด"""
+    view = LIST_VIEWS.get(board_key)
+    if not view:
+        return VIEW_BOARD
+    if requested in (VIEW_BOARD, VIEW_LIST):
+        return requested
+    return view["default"]
+
+
+def board_of_typeform(typeform):
+    """REQUEST_TYPEFORM → board_key (None ถ้าไม่มีบอร์ดรองรับ)"""
+    typeform = str(typeform or "").strip()
+    for key, cfg in BOARDS.items():
+        if cfg["typeform"] == typeform:
+            return key
+    return None
 
 # ลำดับการเรียงการ์ดในบอร์ด
 ORDER_PRIORITY = {"ready": 1, "doing": 2, "tracking": 3, "done": 4, "waiting": 5, "cancel": 6}

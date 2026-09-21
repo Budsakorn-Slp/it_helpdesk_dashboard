@@ -10,6 +10,11 @@ CLOSE_JOB     = "CLOSE_JOB"
 CHANGE_STATUS = "CHANGE_STATUS"
 COST_CENTER   = "COST_CENTER"
 
+#: ส่งต่อเอกสารไปทีมอื่น (เปลี่ยน REQUEST_TYPEFORM + REQUEST_CATEGORY)
+#  แถวนี้เป็นตัวชี้ขาดว่าเอกสารใบไหน "ถูกส่งต่อ" — หน้ารายการใช้กรองเมนูนี้
+#  OLD_STATUS / NEW_STATUS เก็บ "รหัสประเภทเดิม / ใหม่" ไม่ใช่สถานะงาน
+CHANGE_TYPE   = "CHANGE_TYPE"
+
 
 def log(cur, action_type, req_id=None, old_status=None, new_status=None,
         action_by=None, action_note=None):

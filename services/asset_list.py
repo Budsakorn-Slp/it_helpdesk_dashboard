@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""หน้า /asset แบบรายการเอกสาร — กรอง เรียง และแบ่งหน้าที่ฝั่งฐานข้อมูล
+"""หน้ารายการเอกสาร — กรอง เรียง และแบ่งหน้าที่ฝั่งฐานข้อมูล
+
+ใช้ได้กับทุกบอร์ดที่ตั้งไว้ใน config.LIST_VIEWS (ตอนนี้ /asset และ /newreq)
+บอร์ดที่ไม่มีใบโอนย้าย (tracking=False) จะซ่อนสถานะ "ติดตามเอกสาร"
+เมนูหมวดหมู่เอกสาร และคอลัมน์ประเภทให้เอง
 
 ทำใน SQL ทั้งหมด (ดู sql.ASSET_LIST_BASE) เพื่อให้รองรับข้อมูลหลักพันแถวได้
 โดยหน้าเว็บส่งมาเฉพาะแถวของหน้าที่กำลังเปิดอยู่
@@ -27,11 +31,18 @@ SORT_ORDERS = {
     ("date", "desc"): "SORT_DATE DESC NULLS LAST, REQUEST_ID DESC",
 }
 
-#: ลำดับตั้งต้น — งานที่ต้องลงมือขึ้นก่อน แล้วเรียงตามวันที่แจ้ง
+#: ลำดับตั้งต้น
+#   1. กลุ่มงานที่ต้องลงมือก่อน
+#   2. ในกลุ่มติดตามเอกสาร: ใบที่ลายเซ็นครบแล้ว (กดปิดงานได้) ขึ้นบนสุด
+#   3. ในบรรดาใบที่ปิดได้ เรียงตามเวลาที่ลายเซ็นครบ — ใบที่ครบก่อนอยู่บน
+#      (รอปิดงานมานานสุดควรได้ทำก่อน)
+#   4. ที่เหลือเรียงตามวันที่แจ้ง
 DEFAULT_ORDER = (
     "CASE WORKFLOW_STATUS"
     "  WHEN 'ready' THEN 1 WHEN 'doing' THEN 2 WHEN 'tracking' THEN 3"
     "  WHEN 'waiting' THEN 4 WHEN 'done' THEN 5 ELSE 6 END,"
+    " CASE WHEN TRACKING_COMPLETE = 1 THEN 0 ELSE 1 END,"
+    " CASE WHEN TRACKING_COMPLETE = 1 THEN COMPLETED_AT END ASC NULLS LAST,"
     " SORT_DATE ASC NULLS LAST"
 )
 
@@ -49,6 +60,16 @@ WORKFLOW_LABELS = {
 
 #: ลำดับสถานะที่แสดงในเมนูซ้าย
 STAT_GROUPS = ("waiting", "ready", "doing", "tracking", "done", "cancel")
+
+#: สถานะที่มีเฉพาะบอร์ดที่มีใบโอนย้าย
+TRACKING_ONLY_STATUSES = ("tracking",)
+
+
+def status_keys(tracking):
+    """สถานะที่บอร์ดนี้ใช้จริง"""
+    if tracking:
+        return STAT_GROUPS
+    return tuple(k for k in STAT_GROUPS if k not in TRACKING_ONLY_STATUSES)
 
 #: workflow_status → ปุ่มที่แถวนั้นควรมี
 ACTIONS = {
@@ -69,7 +90,7 @@ SEARCH_COLUMNS = (
 
 # ── อ่านค่าจาก query string ─────────────────────────────────────────────────
 
-def parse_filters(args):
+def parse_filters(args, tracking=True):
     """แปลง request.args → dict ที่ผ่านการตรวจแล้ว (ค่าผิดจะกลายเป็นค่าตั้งต้น)"""
     def as_int(name, default):
         try:
@@ -84,9 +105,12 @@ def parse_filters(args):
     days = as_int("days", 0)
     size = as_int("size", DEFAULT_PAGE_SIZE)
 
+    allowed_flows = status_keys(tracking)
+
     return {
-        "flow": flow if flow in WORKFLOW_LABELS else "",
-        "cat":  cat if _valid_cat(cat) else "",
+        "flow": flow if flow in allowed_flows else "",
+        "cat":  cat if (tracking and _valid_cat(cat)) else "",
+        "fwd":  1 if str(args.get("fwd") or "").strip() == "1" else 0,
         "q":    (args.get("q") or "").strip()[:100],
         "days": days if days in DAY_RANGES else 0,
         "sort": sort if (sort, direction) in SORT_ORDERS else "",
@@ -132,6 +156,9 @@ def _build_where(filters):
         clauses.append("DOC_GROUP = :doc_group AND DOC_CODE = :doc_code")
         params["doc_group"], params["doc_code"] = group, code
 
+    if filters["fwd"]:
+        clauses.append("IS_FORWARDED = 1")
+
     if filters["q"]:
         like = " OR ".join(f"{col} LIKE :q" for col in SEARCH_COLUMNS)
         clauses.append(f"({like})")
@@ -167,20 +194,35 @@ def _map_row(d):
     row["workflow_status"]   = workflow
     row["is_tracking"]       = group == config.GROUP_TRANSFER
     row["tracking_complete"] = bool(d.get("tracking_complete"))
+    row["completed_at"]      = docs.fmt_datetime(d.get("completed_at"))
+
+    # บอร์ดต้นทาง — หน้า dashboard รวมทุกบอร์ดจึงต้องรู้ว่าแถวนี้มาจากไหน
+    row["typeform"]   = (d.get("request_typeform") or "").strip()
+    row["category"]   = (d.get("request_category") or "").strip()
+    row["board_key"]  = config.board_of_typeform(row["typeform"])
+    board = config.BOARDS.get(row["board_key"]) if row["board_key"] else None
+    row["board_title"] = board["title"] if board else row["category"]
+
+    # การส่งต่อทีม — มาจาก audit log ครั้งล่าสุด
+    row["is_forwarded"]  = bool(d.get("is_forwarded"))
+    row["forward_by"]    = (d.get("forward_by") or "").strip()
+    row["forward_at"]    = docs.fmt_datetime(d.get("forward_at"))
+    row["forward_from"]  = (d.get("forward_from_name") or "").strip() \
+        or (d.get("forward_from_type") or "").strip()
     row["actions"]           = ACTIONS.get(workflow, ())
     row["flow_label"], row["flow_cls"] = WORKFLOW_LABELS.get(
         workflow, (row["status_label"], row["status_cls"]))
     return row
 
 
-def fetch_page(filters):
+def fetch_page(filters, typeform):
     """แถวของหน้าที่เปิดอยู่, จำนวนทั้งหมดที่ตรงกับตัวกรอง, และเลขหน้าที่ใช้จริง
 
     ถ้า page ที่ขอมาเกินจำนวนหน้าที่มี จะถูกดึงกลับมาหน้าสุดท้าย
     เพื่อไม่ให้เจอตารางว่างทั้งที่ยังมีข้อมูล
     """
     where, params = _build_where(filters)
-    params["typeform"] = config.ASSET_TYPEFORM
+    params["typeform"] = str(typeform).strip() if typeform else None
 
     page_sql = f"""
         SELECT * FROM (
@@ -195,6 +237,7 @@ def fetch_page(filters):
     with db.db_conn() as conn:
         cur = conn.cursor()
         cur.execute(count_sql, params)
+
         total = db.scalar(cur, 0)
 
         total_pages = max(1, -(-total // size))
@@ -207,29 +250,37 @@ def fetch_page(filters):
     return rows, total, page
 
 
-def fetch_counts():
+def fetch_counts(typeform):
     """จำนวนเอกสารแยกตามสถานะและหมวด — ใช้ทำตัวเลขบนเมนู (ไม่ขึ้นกับตัวกรอง)"""
-    flow_counts, cat_counts, group_counts, total = {}, {}, {}, 0
+    flow_counts, cat_counts, group_counts = {}, {}, {}
+    total = forwarded = 0
     with db.db_conn() as conn:
         cur = conn.cursor()
-        cur.execute(sql.ASSET_LIST_STATS, {"typeform": config.ASSET_TYPEFORM})
-        for workflow, group, code, count in cur.fetchall():
+        cur.execute(sql.ASSET_LIST_STATS,
+                    {"typeform": str(typeform).strip() if typeform else None})
+        for workflow, group, code, is_forwarded, count in cur.fetchall():
             flow_counts[workflow] = flow_counts.get(workflow, 0) + count
             cat_counts[(group, code)] = cat_counts.get((group, code), 0) + count
             group_counts[group] = group_counts.get(group, 0) + count
             total += count
-    return {"flow": flow_counts, "cat": cat_counts, "group": group_counts, "total": total}
+            if is_forwarded:
+                forwarded += count
+    return {"flow": flow_counts, "cat": cat_counts, "group": group_counts,
+            "total": total, "forwarded": forwarded}
 
 
 def empty_counts():
     """โครงสร้างว่าง — ใช้ตอนต่อฐานข้อมูลไม่ได้"""
-    return {"flow": {}, "cat": {}, "group": {}, "total": 0}
+    return {"flow": {}, "cat": {}, "group": {}, "total": 0, "forwarded": 0}
 
 
 # ── เมนูซ้าย ─────────────────────────────────────────────────────────────────
 
-def build_status_nav(counts):
-    """หมวด "สถานะงาน" — เรียงตามลำดับการทำงานจริง"""
+def build_status_nav(counts, tracking=True):
+    """หมวด "สถานะงาน" — เรียงตามลำดับการทำงานจริง
+
+    บอร์ดที่ไม่มีใบโอนย้ายจะไม่มีสถานะ "ติดตามเอกสาร"
+    """
     return [
         {
             "key":   key,
@@ -237,7 +288,7 @@ def build_status_nav(counts):
             "cls":   WORKFLOW_LABELS[key][1],
             "count": counts["flow"].get(key, 0),
         }
-        for key in STAT_GROUPS
+        for key in status_keys(tracking)
     ]
 
 

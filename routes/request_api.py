@@ -7,7 +7,7 @@ from flask import Blueprint
 import config
 import db
 import sql
-from services import audit, employees, tracking
+from services import attachments, audit, boards, doc_types, employees, tracking
 from web import api, err_resp, json_body, ok_resp
 
 bp = Blueprint("request_api", __name__, url_prefix="/api")
@@ -46,6 +46,9 @@ def api_detail(req_id):
         d["request_status"] = str(d.get("request_status") or "0")
         d = db.blank_none(d)
 
+        # ไฟล์แนบ: ของเดิม (REQUEST_FILE) + ของใหม่ (IT_HELPDESK_ATTACHMENT)
+        d["attachments"] = attachments.fetch(cur, req_id, d.get("request_file"))
+
         cur.execute(sql.TRANSFER_FOR_REQUEST, {"req_id": req_id})
         transfer = db.row_to_dict(cur)
         d["is_tracking"]       = bool(transfer)
@@ -54,6 +57,14 @@ def api_detail(req_id):
         cur.execute(sql.LATEST_APPROVER_FOR_REQUEST, {"req_id": req_id})
         approver = db.scalar(cur)
         d["approver_status"] = str(approver or "Waiting").strip()
+
+        # สถานะงานตามกติกาเดียวกับบอร์ด/หน้ารายการ — ให้ฝั่งหน้าจอไม่ต้องคำนวณเอง
+        workflow = boards.map_workflow_status(d)
+        if d["is_tracking"] and workflow not in ("cancel", "done"):
+            workflow = "tracking"
+        d["workflow_status"] = workflow
+        # ส่งต่อทีมได้เฉพาะงานที่พร้อมทำ (เงื่อนไขเดียวกับ /api/change_type)
+        d["can_forward"] = workflow == "ready"
 
     return ok_resp(data=d)
 
@@ -183,6 +194,81 @@ def api_cancel_it():
                   new_status=CANCEL_STATUS, action_by=it_name, action_note="IT ยกเลิก")
         conn.commit()
     return ok_resp()
+
+
+@bp.get("/doc_types")
+@api(items=[])
+def api_doc_types():
+    """ประเภทเอกสารที่ส่งต่อได้ — ใช้เติม dropdown ใน modal ส่งต่อ"""
+    with db.db_conn() as conn:
+        return ok_resp(items=doc_types.fetch_selectable(conn.cursor()))
+
+
+@bp.post("/change_type")
+@api()
+def api_change_type():
+    """ส่งต่อเอกสารไปอีกทีม โดยเปลี่ยนประเภทเอกสาร
+
+    เปลี่ยนได้เฉพาะงานที่ "พร้อมทำ" เท่านั้น เพราะทีมใหม่ต้องรับไปทำต่อได้ทันที
+    สถานะงานคงเดิม ไม่รีเซ็ต
+    """
+    (req_id, new_type, action_by, action_note), error = json_body(
+        "request_id", "new_type", "action_by", "action_note",
+        required=("request_id", "new_type", "action_by"))
+    if error:
+        return err_resp(error)
+
+    with db.db_conn() as conn:
+        cur = conn.cursor()
+
+        current = doc_types.current_of(cur, req_id)
+        if not current:
+            return err_resp("ไม่พบคำขอนี้")
+
+        old_type = str(current.get("request_typeform") or "").strip()
+        if old_type == str(new_type).strip():
+            return err_resp("เอกสารอยู่ในประเภทนี้อยู่แล้ว")
+
+        target = doc_types.lookup(cur, new_type)
+        if not target:
+            return err_resp("ไม่พบประเภทเอกสารที่เลือก")
+        if target["id"] not in doc_types.SELECTABLE_TYPE_IDS:
+            return err_resp(f'ส่งต่อไปประเภท "{target["name"]}" ไม่ได้')
+
+        # ต้องอยู่สถานะ "พร้อมทำ" ก่อนจึงส่งต่อได้
+        cur.execute(sql.LATEST_APPROVER_FOR_REQUEST, {"req_id": req_id})
+        approver = str(db.scalar(cur) or "Waiting").strip()
+        workflow = boards.map_workflow_status({
+            "approver_status":  approver,
+            "request_status":   current.get("request_status"),
+            "request_typeform": old_type,
+        })
+        if workflow != "ready":
+            return err_resp("ส่งต่อได้เฉพาะเอกสารที่สถานะ พร้อมทำ เท่านั้น")
+
+        actor_name = employees.resolve_name(cur, action_by) or action_by
+        old_name = (current.get("request_category") or "").strip()
+
+        cur.execute(sql.CHANGE_TYPE, {
+            "new_typeform": target["id"],
+            "new_category": target["name"],
+            "actor_name":   actor_name,
+            "req_id":       req_id,
+        })
+
+        note = f'ส่งต่อเอกสาร: {old_name or old_type} → {target["name"]}'
+        if action_note:
+            note = f"{note} | {action_note}"
+        audit.log(cur, audit.CHANGE_TYPE, req_id=req_id,
+                  old_status=old_type, new_status=target["id"],
+                  action_by=actor_name, action_note=note[:500])
+
+        conn.commit()
+
+    return ok_resp(actor_name=actor_name,
+                   new_type=target["id"],
+                   new_type_name=target["name"],
+                   board=doc_types.board_of(target["id"]))
 
 
 @bp.post("/change_status")

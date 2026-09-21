@@ -1,7 +1,55 @@
 {# ══════════════════════════════════════════════════════════════════
-   Modal ที่ใช้ร่วมกันระหว่างหน้าบอร์ด (board.html) และหน้ารายการ (asset_list.html)
+   Modal ที่ใช้ร่วมกันระหว่างหน้าบอร์ด หน้ารายการ และหน้าแรก
    ตรรกะทั้งหมดอยู่ใน static/js/ui.js
+
+   หน้าที่ส่ง readonly = true (หน้าแรก) จะได้เฉพาะ modal รายละเอียด
+   กับ toast เท่านั้น — modal ที่แก้ข้อมูลได้จะไม่ถูก render เลย
 ════════════════════════════════════════════════════════════════════ #}
+{% set readonly = readonly | default(false) %}
+
+{% if not readonly %}
+<!-- ══════════════════════════════════════
+     Modal: ส่งต่อไปอีกทีม (เปลี่ยนประเภทเอกสาร)
+══════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-change-type">
+  <div class="modal-box">
+    <div class="modal-title">ส่งต่อเอกสารไปอีกทีม</div>
+    <p style="font-size:13px;color:var(--text-sub);margin:8px 0 4px">
+      Request ID: <strong id="change-type-req-id" class="modal-req-id">—</strong>
+    </p>
+
+    <div class="fwd-current">
+      ประเภทปัจจุบัน: <strong id="change-type-current">—</strong>
+    </div>
+
+    <label>ส่งต่อไปประเภท</label>
+    <select class="emp-select" id="change-type-select">
+      <option value="">-- กำลังโหลด... --</option>
+    </select>
+
+    <label>ผู้ดำเนินการ (IT)</label>
+    <select class="emp-select" id="change-type-by">
+      <option value="">-- กำลังโหลด... --</option>
+    </select>
+
+    <label>หมายเหตุ (ไม่บังคับ)</label>
+    <textarea class="status-note" id="change-type-note" rows="2"
+              placeholder="เหตุผลที่ส่งต่อ..."></textarea>
+
+    <div class="fwd-warn">
+      เอกสารจะย้ายไปอยู่บอร์ดของทีมใหม่ทันที และยังคงสถานะ <strong>พร้อมทำ</strong>
+    </div>
+
+    <div class="modal-btns">
+      <button class="modal-cancel-btn" onclick="closeChangeTypeModal()">ยกเลิก</button>
+      <button class="modal-confirm"    onclick="confirmChangeType()">
+        <svg width="13" height="13" fill="none" stroke="#fff" stroke-width="2.5"><use href="#ic-forward" /></svg>
+        ยืนยัน ส่งต่อ
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════
      Modal: รับงาน
 ══════════════════════════════════════ -->
@@ -133,9 +181,10 @@
     </div>
   </div>
 </div>
+{% endif %}{# not readonly #}
 
 <!-- ══════════════════════════════════════
-     Detail Modal
+     Detail Modal — มีทุกหน้า (หน้าแรกใช้ดูอย่างเดียว)
 ══════════════════════════════════════ -->
 <div class="detail-overlay" id="modal-detail">
   <div class="detail-modal">
@@ -167,6 +216,7 @@
           <div class="dm-assignee-dept" id="d-assignee-dept"></div>
         </div>
       </div>
+      {% if not readonly %}
       <div class="dm-assignee-actions" id="dm-action-buttons">
         <button id="btn-change-status" class="dm-btn-primary" onclick="openStatusModal(currentDetailReqId)">
           <svg width="14" height="14" fill="none" stroke="#fff" stroke-width="2.2" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
@@ -176,6 +226,13 @@
           <svg width="14" height="14" fill="none" stroke="var(--purple)" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
           เปลี่ยนผู้ทำ
         </button>
+        <button id="btn-forward" class="dm-btn-outline dm-btn-forward"
+                style="display:none"
+                title="ส่งต่อไปอีกทีม (เปลี่ยนประเภทเอกสาร)"
+                onclick="openChangeTypeFromDetail()">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><use href="#ic-forward"/></svg>
+          ส่งต่อ
+        </button>
         <button id="btn-close-tracking" class="dm-btn-primary"
                 style="display:none;background:var(--green)"
                 onclick="openCloseTrackFromDetail(currentDetailReqId)">
@@ -183,6 +240,7 @@
           ปิดงาน
         </button>
       </div>
+      {% endif %}
     </div>
 
     <!-- Body -->
@@ -195,6 +253,7 @@
 
   <div class="toast" id="toast"></div>
 
+{% if not readonly %}
 <!-- ══════════════════════════════════════
      Modal: ปิดงานเอกสาร (tracking)
 ══════════════════════════════════════ -->
@@ -214,3 +273,4 @@
     </div>
   </div>
 </div>
+{% endif %}{# not readonly #}
