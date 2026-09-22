@@ -164,6 +164,7 @@ input.warn{border-color:var(--amber-tx);background:#fffdf7}
 .progress-result .ok-count{color:var(--green-tx);font-weight:600}
 .progress-result .skip-count{color:var(--amber-tx);font-weight:600}
 .progress-result .err-count{color:var(--red-tx);font-weight:600}
+.progress-result .blank-count{color:var(--ink-faint);font-weight:500}
 
 /* Preview table */
 .preview-wrap{margin-top:18px}

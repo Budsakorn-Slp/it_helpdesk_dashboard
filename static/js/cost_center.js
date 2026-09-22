@@ -344,12 +344,13 @@ function processFile(file) {
     reader.onload = e => {
       const lines = e.target.result.trim().split('\n');
       const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
-      const rows = lines.slice(1).map(line => {
+      const rows = lines.slice(1).map((line, i) => {
         const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g,''));
         const obj = {};
-        headers.forEach((h,i) => obj[h] = vals[i] || '');
+        headers.forEach((h,j) => obj[h] = vals[j] || '');
+        obj.__excelRow = i + 2;   // เก็บเลขแถวจริงไว้ ก่อนกรองแถวว่างออก
         return obj;
-      }).filter(r => Object.values(r).some(v => v));
+      }).filter(r => Object.keys(r).some(k => k !== '__excelRow' && r[k]));
       setRows(rows, headers);
     };
     reader.readAsText(file, 'UTF-8');
@@ -360,8 +361,14 @@ function processFile(file) {
       try {
         const wb = XLSX.read(e.target.result, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        setRows(data, Object.keys(data[0] || {}));
+        const raw  = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        const head = Object.keys(raw[0] || {});
+        // Excel มักติดแถวเปล่าท้ายไฟล์มาด้วยเพราะจำการจัดรูปแบบของเซลล์ไว้
+        // ต้องกรองทิ้งเหมือนฝั่ง CSV ไม่งั้นจะถูกรายงานว่า "ข้อมูลไม่ครบ"
+        const data = raw
+          .map((r, i) => Object.assign({}, r, { __excelRow: i + 2 }))
+          .filter(r => head.some(h => String(r[h] ?? '').trim() !== ''));
+        setRows(data, head);
       } catch(err) {
         toast('อ่านไฟล์ไม่สำเร็จ: ' + err.message, 'error');
       }
@@ -456,13 +463,13 @@ async function uploadFile() {
   progWrap.classList.add('show');
   progRes.innerHTML = '';
 
-  let okCount = 0, updCount = 0, errCount = 0, skipCount = 0;
+  let okCount = 0, updCount = 0, errCount = 0, skipCount = 0, blankCount = 0;
   const total    = parsedRows.length;
   const errRows  = []; // เก็บรายการที่มีปัญหา
 
   for (let i = 0; i < total; i++) {
     const row = parsedRows[i];
-    const rowNo = i + 2; // บวก 2 เพราะ Excel row 1 = header, data เริ่มที่ row 2
+    const rowNo = row.__excelRow || (i + 2); // เลขแถวจริงในไฟล์ (row 1 = header)
     const pct = Math.round(((i + 1) / total) * 100);
     progBar.style.width = pct + '%';
     progPct.textContent = pct + '%';
@@ -473,7 +480,17 @@ async function uploadFile() {
     const costdep    = cellText(row, parsedCols.costdep);   // รหัสแผนก
     const desc       = cellText(row, parsedCols.desc);
     const costcenter = cellText(row, parsedCols.costcenter);
-    const status     = cellText(row, parsedCols.status) || 'Active';
+    const rawStatus  = cellText(row, parsedCols.status);
+    const status     = rawStatus || 'Active';
+
+    // ── แถวว่างทั้งแถว: ข้ามเงียบ ๆ ──
+    // Excel มักติดแถวเปล่าท้ายไฟล์มาด้วย เพราะจำการจัดรูปแบบของเซลล์ไว้
+    // (เคยพิมพ์แล้วลบ หรือลากเส้นตาราง) แถวพวกนี้ไม่ใช่ข้อมูลที่กรอกผิด
+    // จึงไม่ควรนับเป็น "ข้อมูลไม่ครบ" ไปกลบแถวที่ผิดพลาดจริง
+    if (!company && !dept && !costdep && !costcenter && !desc && !rawStatus) {
+      blankCount++;
+      continue;
+    }
 
     // ── ตรวจ required fields ──
     const missing = [];
@@ -559,7 +576,8 @@ async function uploadFile() {
     <span class="ok-count">✔ เพิ่มใหม่ ${okCount} รายการ</span>
     ${updCount  ? `<span class="skip-count">⟳ อัปเดต ${updCount} รายการ</span>` : ''}
     ${skipCount ? `<span class="skip-count">⚠ ข้อมูลไม่ครบ ${skipCount} รายการ</span>` : ''}
-    ${errCount  ? `<span class="err-count">✖ DB Error ${errCount} รายการ</span>` : ''}`;
+    ${errCount  ? `<span class="err-count">✖ DB Error ${errCount} รายการ</span>` : ''}
+    ${blankCount ? `<span class="blank-count">แถวว่างที่ข้ามไป ${blankCount} แถว</span>` : ''}`;
 
   // ── แสดงตาราง error detail ถ้ามี ──
   if (errRows.length) {
